@@ -1,0 +1,16 @@
+# Settings to manage and configure a Firebase App Hosting backend.
+# https://firebase.google.com/docs/app-hosting/configure
+runConfig:
+  # Increase this value if you'd like to automatically spin up
+  # more instances in response to increased traffic.
+  maxInstances: 1
+# Add a rewrite to deploy a server-side rendered Next.js app.
+# https://firebase.google.com/docs/app-hosting/configure#rewrites
+rewrites:
+  - source: '/**'
+    destination: '/_next/server/server.js'
+
+# SNAPSHOT: Estável antes da implementação da área de Copy Trade
+# Filtros: EUR/USD/JPY (1, 2 e 3 touros)
+# UI: Foco em texto branco nos Selects
+# Data: 2026-05-09

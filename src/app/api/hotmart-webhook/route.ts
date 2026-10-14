@@ -1,0 +1,115 @@
+
+import { NextRequest, NextResponse } from 'next/server';
+import { initializeAdminApp } from '@/firebase/admin';
+import admin from 'firebase-admin';
+
+/**
+ * Maps Hotmart's subscription statuses to our internal application statuses.
+ * @param hotmartStatus The status string received from Hotmart.
+ * @returns 'ACTIVE' or 'INACTIVE'.
+ */
+function mapHotmartStatusToAppStatus(hotmartStatus: string): 'ACTIVE' | 'INACTIVE' {
+  const activeStatuses = ['active', 'activated', 'started'];
+  // Any status not explicitly active is considered inactive (e.g., 'canceled', 'expired', 'inactive').
+  return activeStatuses.includes(hotmartStatus.toLowerCase()) ? 'ACTIVE' : 'INACTIVE';
+}
+
+/**
+ * Endpoint to handle Hotmart's postback notifications for subscriptions.
+ * This function is designed to securely process subscription status changes.
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const data = await request.json();
+    
+    // Security First: Verify Hotmart's token immediately.
+    const hotmartToken = process.env.HOTMART_TOKEN;
+
+    if (!hotmartToken) {
+      console.error('CRITICAL: HOTMART_TOKEN environment variable is not set.');
+      // Respond with 500 but don't give away internal details.
+      return new NextResponse('Internal server error.', { status: 500 });
+    }
+
+    const providedToken = request.headers.get('Hottok');
+    if (providedToken !== hotmartToken) {
+      console.warn(`Unauthorized webhook attempt with token: ${providedToken}`);
+      return new NextResponse('Unauthorized.', { status: 401 });
+    }
+
+    // If token is valid, proceed to initialize Firebase and process the data.
+    try {
+      initializeAdminApp();
+    } catch (error) {
+      console.error('Firebase admin initialization failed:', error);
+      return new NextResponse('Internal server configuration error.', { status: 500 });
+    }
+
+    console.log('Received data from Hotmart:', JSON.stringify(data, null, 2));
+
+    const userEmail = data?.subscriber?.email || data?.buyer?.email;
+    const subscriptionStatus = data?.status;
+    const userName = data?.buyer?.name;
+
+    if (!userEmail || !subscriptionStatus) {
+      console.warn('Webhook received but missing required fields (email or status).');
+      return new NextResponse('Missing required fields.', { status: 400 });
+    }
+
+    const firestore = admin.firestore();
+    const auth = admin.auth();
+    const newAppStatus = mapHotmartStatusToAppStatus(subscriptionStatus);
+
+    let userRecord;
+    try {
+        // Try to find an existing user by email.
+        userRecord = await auth.getUserByEmail(userEmail);
+    } catch (error: any) {
+        if (error.code === 'auth/user-not-found' && newAppStatus === 'ACTIVE') {
+            console.log(`User with email ${userEmail} not found. Creating a new user.`);
+            // If the user doesn't exist and the status is active, create them.
+            userRecord = await auth.createUser({
+                email: userEmail,
+                displayName: userName || userEmail.split('@')[0], // Use name from Hotmart or derive from email
+                emailVerified: true, // Assume email is verified as it's from a purchase
+            });
+            console.log(`Successfully created new user: ${userRecord.uid}`);
+        } else {
+            // For other errors or if status is not 'ACTIVE' for a non-existent user.
+            console.error(`Error fetching user ${userEmail}:`, error);
+             // Acknowledge to Hotmart to prevent retries for non-actionable errors.
+            return new NextResponse('User not found or not an activation event.', { status: 200 });
+        }
+    }
+    
+    // At this point, we have a userRecord (either found or newly created).
+    const userDocRef = firestore.collection('users').doc(userRecord.uid);
+    const userProfileData: any = {
+        email: userEmail,
+        displayName: userRecord.displayName || userName,
+        subscriptionStatus: newAppStatus,
+        userOrigin: 'ANALYZER',
+        lastHotmartUpdate: admin.firestore.FieldValue.serverTimestamp(),
+        lastHotmartStatus: subscriptionStatus,
+    };
+    
+    // Ensure createdAt exists
+    const docSnap = await userDocRef.get();
+    if (!docSnap.exists) {
+        userProfileData.createdAt = admin.firestore.FieldValue.serverTimestamp();
+    }
+    
+    // Use set with merge to create the document if it doesn't exist or update it if it does.
+    await userDocRef.set(userProfileData, { merge: true });
+
+    console.log(`Successfully processed webhook for user ${userRecord.uid} (${userEmail}). Set status to ${newAppStatus}.`);
+
+    // Acknowledge receipt to Hotmart with a simple 200 OK.
+    return new NextResponse('Webhook processed successfully.', { status: 200 });
+
+  } catch (error) {
+    console.error('Error processing Hotmart webhook payload:', error);
+    // This top-level catch handles errors like invalid JSON in the request body.
+    return new NextResponse('An internal error occurred.', { status: 500 });
+  }
+}

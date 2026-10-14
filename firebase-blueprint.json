@@ -1,0 +1,192 @@
+
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores public information about a user.",
+      "type": "object",
+      "properties": {
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's public display name."
+        },
+        "subscriptionStatus": {
+          "type": "string",
+          "description": "The current status of the user's subscription.",
+          "enum": ["ACTIVE", "INACTIVE", "CANCELED"]
+        },
+        "accountStatus": {
+          "type": "string",
+          "description": "The administrative status of the user account.",
+          "enum": ["ACTIVE", "DISABLED"]
+        },
+        "userOrigin": {
+          "type": "string",
+          "description": "Identifies if the user registered via the main analyzer or copy trade.",
+          "enum": ["ANALYZER", "COPY"]
+        },
+        "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The timestamp when the user account was created."
+        },
+        "termsAccepted": {
+            "type": "boolean",
+            "description": "Indicates whether the user has accepted the terms and conditions."
+        },
+        "termsAcceptedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "The timestamp when the user accepted the terms and conditions."
+        },
+        "lastHotmartStatus": {
+          "type": "string",
+          "description": "The last status received from Hotmart webhook."
+        },
+        "lastHotmartUpdate": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp of the last Hotmart update."
+        },
+        "rating": {
+          "type": "number",
+          "description": "User rating assigned by admin (0-5 stars)."
+        }
+      },
+      "required": ["email", "createdAt", "userOrigin"]
+    },
+    "VipRequest": {
+      "title": "VIP Access Request",
+      "description": "Stores a user's request for VIP access after signing up through an affiliate link.",
+      "type": "object",
+      "properties": {
+        "brokerId": {
+          "type": "string",
+          "description": "The user's ID from the brokerage account.",
+          "pattern": "^[0-9]{8,}$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "The Firebase Authentication UID of the user."
+        },
+        "userEmail": {
+          "type": "string",
+          "format": "email",
+          "description": "The email of the user requesting access."
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the VIP request.",
+          "enum": [
+            "PENDING",
+            "AWAITING_DEPOSIT",
+            "DEPOSIT_PENDING",
+            "APPROVED",
+            "REJECTED",
+            "PREMIUM"
+          ]
+        },
+        "submittedAt": {
+          "type": "string",
+          "description": "The date and time when the request was submitted.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "brokerId",
+        "userId",
+        "status",
+        "submittedAt"
+      ]
+    },
+    "CopyRequest": {
+      "title": "Copy Trade Connection Request",
+      "description": "User request to connect to copy trade.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "brokerId": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "ERROR_LIQUIDITY", "REJECTED", "AWAITING_DEPOSIT", "DEPOSIT_PENDING", "AUTHORIZED", "REGISTERED"] },
+        "hasBalance": { "type": "boolean", "description": "Whether the user has been verified with balance." },
+        "submittedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "brokerId", "status", "submittedAt"]
+    },
+    "AppConfig": {
+      "title": "App Configuration",
+      "description": "General settings for the application.",
+      "type": "object",
+      "properties": {
+        "registrationSecret": { "type": "string" },
+        "supportUrl": { "type": "string" },
+        "hourlySignalLimit": { "type": "number" },
+        "newsWarningDuration": { "type": "number" },
+        "otcExcellentFrequency": { "type": "number" }
+      }
+    }
+  },
+  "auth": {
+    "providers": [
+      "password"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Stores user profile information."
+        }
+      },
+      {
+        "path": "/vipRequests/{userId}",
+        "definition": {
+          "entityName": "VipRequest",
+          "schema": {
+            "$ref": "#/backend/entities/VipRequest"
+          },
+          "description": "Stores VIP access requests."
+        }
+      },
+      {
+        "path": "/copyRequests/{requestId}",
+        "definition": {
+          "entityName": "CopyRequest",
+          "schema": {
+            "$ref": "#/backend/entities/CopyRequest"
+          },
+          "description": "Stores copy trade connection requests."
+        }
+      },
+      {
+        "path": "/appConfig/{configId}",
+        "definition": {
+          "entityName": "AppConfig",
+          "schema": {
+            "$ref": "#/backend/entities/AppConfig"
+          },
+          "description": "Global configuration documents (time, pages, links, registration, etc.)."
+        }
+      },
+      {
+        "path": "/session/{sessionId}",
+        "definition": {
+          "entityName": "SessionData",
+          "schema": { "type": "object" },
+          "description": "Live session status and scoreboard (status, monthly_score)."
+        }
+      }
+    ],
+    "reasoning": "Standardized data structure to include application settings, user management, live session control, and copy trade verification with origin tracking."
+  }
+}

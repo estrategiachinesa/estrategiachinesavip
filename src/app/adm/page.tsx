@@ -1,0 +1,2203 @@
+'use client';
+
+import { useState, useEffect, useMemo } from 'react';
+import { useFirebase, useCollection, useMemoFirebase, useDoc } from '@/firebase';
+import { collection, doc, deleteDoc, setDoc, serverTimestamp, getDoc, query, where, getDocs } from 'firebase/firestore';
+import { 
+  Loader2, 
+  LogOut,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Key,
+  LayoutDashboard,
+  ArrowUpDown,
+  MoreVertical,
+  Settings2,
+  Save,
+  Tv,
+  Plus,
+  Minus,
+  Link as LinkIcon,
+  MousePointer2,
+  Eye,
+  EyeOff,
+  Copy,
+  History,
+  Users,
+  Timer,
+  Star,
+  Ban,
+  ShieldOff,
+  ShieldCheck,
+  UserPlus,
+  AlertCircle,
+  Zap,
+  BarChart3,
+  Trash2,
+  Crown,
+  Headset,
+  UserCheck,
+  RefreshCcw,
+  StarHalf,
+  Layout,
+  ToggleRight,
+  ExternalLink,
+  ArrowUp,
+  ArrowDown,
+  Clock,
+  Sparkles,
+  CalendarClock,
+  X,
+  RotateCcw,
+  CircleDollarSign,
+  TrendingUp,
+  Activity,
+  Target,
+  ArrowUpCircle,
+  ArrowDownCircle,
+  Trophy,
+  Calendar,
+  ImageIcon,
+  Instagram,
+  Send,
+  MessageSquare,
+  CheckCircle2,
+  Mail,
+  User as UserIcon,
+  Check,
+  Bot,
+  MessageSquareCode,
+  BellRing,
+  Volume2,
+  VolumeX,
+  ShieldAlert,
+  UserX,
+  Wallet
+} from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuSeparator, 
+  DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent
+} from '@/components/ui/dropdown-menu';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/hooks/use-toast';
+import { useAffiliateRouter } from '@/hooks/use-affiliate-router';
+import { useAppConfig } from '@/firebase/config-provider';
+import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
+const ADMIN_EMAILS = ['chines@trader.com', 'estrategiachinesa@gmail.com'];
+
+const DAY_NAMES = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+
+type TimeSlot = { start: string; end: string };
+type ScheduleEdit = Record<number, TimeSlot[]>;
+
+type SortConfig = {
+  key: string;
+  direction: 'asc' | 'desc';
+};
+
+type QuickFilter = 'ALL' | 'PENDING' | 'PREMIUM' | 'SUSPENDED' | 'REJECTED' | 'DEPOSIT';
+
+type PageConfigItem = {
+    id: string;
+    label: string;
+    path: string;
+    enabled: boolean;
+};
+
+const DEFAULT_PAGE_LIST: PageConfigItem[] = [
+    { id: 'analisador', label: 'ANALISADOR', path: '/analisador/', enabled: true },
+    { id: 'sessaochinesa', label: 'SESSÃO CHINESA', path: '/sessaochinesa/', enabled: true },
+    { id: 'bb', label: 'BROKER BREAKER', path: 'https://www.brokerbreaker.com.br/', enabled: true },
+    { id: 'vip', label: 'PÁGINA VIP', path: '/vip/', enabled: true },
+    { id: 'descubra', label: 'VSL', path: '/descubra/', enabled: true },
+    { id: 'register', label: 'REGISTRO', path: '/register/', enabled: true },
+    { id: 'copy', label: 'COPY TRADE', path: '/copy/', enabled: true },
+    { id: 'cf_descubra', label: 'CF VSL (PRE-SELL)', path: '/cf/descubra/', enabled: true },
+    { id: 'cf_vip', label: 'CF VIP (PRE-SELL)', path: '/cf/vip/', enabled: true },
+    { id: 'go_descubra', label: 'GO VSL (FANTASMA)', path: '/go/descubra/', enabled: true },
+    { id: 'go_vip', label: 'GO VIP (FANTASMA)', path: '/go/vip/', enabled: true },
+];
+
+const IMAGE_DEFAULT_SCHEDULE: ScheduleEdit = {
+    0: [{ start: '21:00', end: '23:59' }],
+    1: [{ start: '00:00', end: '17:00' }, { start: '21:00', end: '23:59' }],
+    2: [{ start: '00:00', end: '17:00' }, { start: '21:00', end: '23:59' }],
+    3: [{ start: '00:00', end: '17:00' }, { start: '21:00', end: '23:59' }],
+    4: [{ start: '00:00', end: '17:00' }, { start: '21:00', end: '23:59' }],
+    5: [{ start: '00:00', end: '15:30' }],
+    6: []
+};
+
+const decimalToTime = (dec: number): string => {
+    const hours = Math.floor(dec);
+    const mins = Math.round((dec - hours) * 60);
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+};
+
+const timeToDecimal = (time: string): number => {
+    if (!time) return 0;
+    const [h, m] = time.split(':').map(Number);
+    return h + (m / 60);
+};
+
+const formatCurrency = (val: number) => {
+    return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+};
+
+const formatFullDate = (dateStr: string, timeStr: string) => {
+    if (!dateStr || !timeStr) return '--/--/-- --:--';
+    try {
+        const [y, m, d] = dateStr.split('-');
+        const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+        const day = date.getDate().toString().padStart(2, '0');
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const year = y.toString().substring(2);
+        return `${day}/${month}/${year} ${timeStr}`;
+    } catch (e) {
+        return `${dateStr} ${timeStr}`;
+    }
+};
+
+type CopyTradeResult = {
+    id: string;
+    asset: string;
+    direction: 'CALL' | 'PUT';
+    result: 'WIN' | 'LOSS' | 'DRAW';
+    time: string;
+    date: string;
+    netChange: number;
+    value: number;
+};
+
+export default function AdminDashboard() {
+  const { auth, user, isUserLoading, firestore } = useFirebase();
+  const { config } = useAppConfig();
+  const { toast } = useToast();
+  const router = useAffiliateRouter();
+  
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeFilter, setActiveFilter] = useState<QuickFilter>('ALL');
+  const [sortConfig, setSortConfig] = useState<SortConfig>({ key: 'createdAt', direction: 'desc' });
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // User ID Details & Balance Modal
+  const [selectedUserDetail, setSelectedUserDetail] = useState<any | null>(null);
+  const [userBalanceInput, setUserBalanceInput] = useState<string>('');
+  const [isUpdatingBalance, setIsUpdatingBalance] = useState(false);
+
+  const [isConfigSaving, setIsConfigSaving] = useState(false);
+  const [regSecret, setRegSecret] = useState('');
+  const [supportLink, setSupportLink] = useState('');
+  const [showSecret, setShowSecret] = useState(false);
+  const [invertSignals, setInvertSignals] = useState(false);
+  const [signalLimit, setSignalLimit] = useState(3);
+  const [newsWarningDuration, setNewsWarningDuration] = useState(60);
+  const [otcExcellentFrequency, setOtcExcellentFrequency] = useState(4);
+
+  // VIP Page Configs
+  const [vipVslId, setVipVslId] = useState('8RebjHIi7Ok');
+  const [vipPrice, setVipPrice] = useState('R$ 197');
+  
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const [isClicksDialogOpen, setIsClicksDialogOpen] = useState(false);
+
+  const [zoomLink, setZoomLink] = useState('');
+  const [isSavingLink, setIsSavingLink] = useState(false);
+
+  const [pagesConfig, setPagesConfig] = useState<PageConfigItem[]>(DEFAULT_PAGE_LIST);
+  const [isSavingPages, setIsSavingPages] = useState(false);
+
+  // Copy Trade state
+  const [isSavingCopy, setIsSavingCopy] = useState(false);
+  const [copyBalance, setCopyBalance] = useState(245892.10);
+  const [copyInitialBalance, setCopyInitialBalance] = useState(240000.00);
+  const [copyResults, setCopyResults] = useState<CopyTradeResult[]>([]);
+  const [copyLiquidity, setCopyLiquidity] = useState(1000);
+  const [copyAffUrl, setCopyAffUrl] = useState('');
+  const [copyTraderName, setCopyTraderName] = useState('Trader Chines');
+  const [copyProfilePicUrl, setCopyProfilePicUrl] = useState('');
+  const [copyInstagramUrl, setCopyInstagramUrl] = useState('');
+  const [copyTikTokUrl, setCopyTikTokUrl] = useState('');
+  const [copyTelegramUrl, setCopyTelegramUrl] = useState('');
+  const [copyIsActive, setCopyIsActive] = useState(true);
+  const [prevCopyIsActive, setPrevCopyIsActive] = useState(true);
+  const [tgBotToken, setTgBotToken] = useState('');
+  const [tgChatId, setTgChatId] = useState('');
+
+  // Whitelist manual state
+  const [newAuthId, setNewAuthId] = useState('');
+  const [isAuthorizing, setIsAuthorizing] = useState(false);
+
+  // Bot Settings state
+  const [tgEnabled, setTgEnabled] = useState(true);
+  const [tgNotifyWin, setTgNotifyWin] = useState(true);
+  const [tgNotifyLoss, setTgNotifyLoss] = useState(true);
+  const [tgNotifyDraw, setTgNotifyDraw] = useState(true);
+  const [tgNotifyStatus, setTgNotifyStatus] = useState(true);
+  const [tgNotifyLeads, setTgNotifyLeads] = useState(true);
+  
+  const [tgMsgWin, setTgMsgWin] = useState('🚀 *NOVA OPERAÇÃO COPIADA!*\n\n✅ Resultado: *WIN*\n📊 Ativo: *{{asset}}*\n🚀 Ação: *{{direction}}*\n💰 Lucro: *{{profit}}*\n\n🎯 *Membro sincronizado está lucrando agora.*\n🔗 [CLIQUE AQUI PARA CONECTAR]({{url}})');
+  const [tgMsgLoss, setTgMsgLoss] = useState('📉 *OPERAÇÃO FINALIZADA*\n\n❌ Resultado: *LOSS*\n📊 Ativo: *{{asset}}*\n🚀 Ação: *{{direction}}*\n💰 Resultado: *{{profit}}*\n\n⚠️ Faz parte da gestão. O Master segue operando.\n🔗 [CLIQUE AQUI PARA CONECTAR]({{url}})');
+  const [tgMsgDraw, setTgMsgDraw] = useState('⚪ *OPERAÇÃO EMPATADA*\n\n📊 Ativo: *{{asset}}*\n🚀 Ação: *{{direction}}*\n💰 Resultado: *0.00*\n\n🛡️ O algoritmo protegeu o capital do cluster.\n🔗 [CLIQUE AQUI PARA CONECTAR]({{url}})');
+  const [tgMsgActive, setTgMsgActive] = useState('🚀 *COPY TRADE ATIVADO!*\n\nO algoritmo acaba de identificar liquidez. Todas as contas sincronizadas começarão a copiar agora.\n\n🔗 [CONECTAR AGORA]({{url}})');
+  const [tgMsgReport, setTgMsgReport] = useState('📊 *RELATÓRIO DIÁRIO - ESTRATÉGIA CHINESA*\n\n✅ Placar: *{{wins}}W - {{losses}}L*\n💰 Lucro Acumulado: *{{profit}}*\n🎯 Assertividade: *{{winrate}}*\n\nQuem seguiu o Copy Master hoje saiu no lucro. Conecte-se para amanhã!\n\n🔗 [CLIQUE AQUI]({{url}})');
+  const [tgMsgLead, setTgMsgLead] = useState('👤 *NOVA SOLICITAÇÃO DE CONEXÃO!*\n\nUm novo membro acaba de enviar o ID para validação no Cluster de Elite.\n\n🆔 ID Corretora: *{{id}}*\n⏳ Status: *EM ANÁLISE*\n\nRestam poucas vagas para a sincronização gratuita hoje!\n\n🔗 [QUERO MINHA VAGA]({{url}})');
+  const [tgMsgDeposit, setTgMsgDeposit] = useState('💰 *MARGEM DE SEGURANÇA ATIVADA!*\n\nO sistema detectou um novo aporte de capital. Mais uma conta sincronizada com o Master Trader com sucesso!\n\n✅ Sincronização: *LIBERADA*\n🎯 Operações: *ATIVAS*\n\n🔗 [CONECTAR MEU ID TAMBÉM]({{url}})');
+
+  // Local trade states for launching results
+  const [tradeAsset, setTradeAsset] = useState('EUR/JPY');
+  const [tradeDirection, setTradeDirection] = useState<'CALL' | 'PUT'>('CALL');
+  const [tradeValue, setTradeValue] = useState(100);
+  const [tradePayout, setTradePayout] = useState(87);
+  const [tradeTime, setTradeTime] = useState(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+  const [tradeDate, setTradeDate] = useState(new Date().toISOString().split('T')[0]);
+  const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
+
+  // Market Schedules state
+  const [eurUsdSchedule, setEurUsdSchedule] = useState<ScheduleEdit>({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
+  const [eurJpySchedule, setEurJpySchedule] = useState<ScheduleEdit>({ 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] });
+  const [isSavingTime, setIsSavingTime] = useState(false);
+
+  const isAdmin = user && ADMIN_EMAILS.includes(user.email || '');
+
+  const sessionStatusRef = useMemoFirebase(() => firestore ? doc(firestore, 'session', 'status') : null, [firestore]);
+  const sessionScoreRef = useMemoFirebase(() => firestore ? doc(firestore, 'session', 'monthly_score') : null, [firestore]);
+  const { data: sessionStatus } = useDoc(sessionStatusRef);
+  const { data: sessionScore } = useDoc(sessionScoreRef);
+
+  // Pedidos Copy Trade
+  const copyRequestsQuery = useMemoFirebase(() => {
+      if (!firestore || !isAdmin) return null;
+      return collection(firestore, 'copyRequests');
+  }, [firestore, isAdmin]);
+  const { data: copyRequests, isLoading: isCopyRequestsLoading } = useCollection(copyRequestsQuery);
+
+  const handleSaveUserBalance = async () => {
+    if (!firestore || !selectedUserDetail) return;
+    setIsUpdatingBalance(true);
+    try {
+        const numericBalance = parseFloat(userBalanceInput) || 0;
+        
+        // Save to users collection if they have a real profile
+        if (!selectedUserDetail.isGhost) {
+            await setDoc(doc(firestore, 'users', selectedUserDetail.id), { 
+                balance: numericBalance,
+                updatedAt: serverTimestamp() 
+            }, { merge: true });
+        }
+        
+        // Save to vipRequests collection
+        await setDoc(doc(firestore, 'vipRequests', selectedUserDetail.id), { 
+            balance: numericBalance,
+            updatedAt: serverTimestamp() 
+        }, { merge: true });
+
+        // Check if they have an active copyRequest by matching brokerId
+        if (selectedUserDetail.brokerId && selectedUserDetail.brokerId !== '---') {
+            const q = query(collection(firestore, 'copyRequests'), where('brokerId', '==', selectedUserDetail.brokerId));
+            const snap = await getDocs(q);
+            if (!snap.empty) {
+                await Promise.all(snap.docs.map(d => 
+                    setDoc(doc(firestore, 'copyRequests', d.id), {
+                        balance: numericBalance,
+                        hasBalance: numericBalance > 0,
+                        updatedAt: serverTimestamp()
+                    }, { merge: true })
+                ));
+            }
+        }
+
+        toast({ 
+            title: 'Saldo Atualizado!', 
+            description: `Novo saldo para ID ${selectedUserDetail.brokerId}: ${formatCurrency(numericBalance)}` 
+        });
+        
+        // Update local state of selectedUserDetail so UI updates immediately
+        setSelectedUserDetail((prev: any) => prev ? { ...prev, balance: numericBalance } : null);
+    } catch (e) {
+        console.error(e);
+        toast({ variant: 'destructive', title: 'Erro ao salvar saldo' });
+    } finally {
+        setIsUpdatingBalance(false);
+    }
+  };
+
+  const handleAuthorizeId = async () => {
+    if (!firestore || !newAuthId) return;
+    
+    if (newAuthId.length < 8) {
+        toast({ variant: 'destructive', title: 'ID muito curto', description: 'O ID da corretora deve ter no mínimo 8 números.' });
+        return;
+    }
+
+    setIsAuthorizing(true);
+    try {
+        const requestId = `auth_${newAuthId}`;
+        await setDoc(doc(firestore, 'copyRequests', requestId), {
+            brokerId: newAuthId,
+            status: 'AUTHORIZED',
+            submittedAt: serverTimestamp(),
+            manualAuth: true
+        });
+        toast({ title: 'ID Autorizado com Sucesso', description: `O terminal ${newAuthId} agora pode realizar o cadastro.` });
+        setNewAuthId('');
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Erro ao autorizar' });
+    } finally {
+        setIsAuthorizing(false);
+    }
+  };
+
+  const handleUpdateCopyRequest = async (requestId: string, status: string) => {
+    if (!firestore) return;
+    try {
+        await setDoc(doc(firestore, 'copyRequests', requestId), { status, updatedAt: serverTimestamp() }, { merge: true });
+        toast({ title: 'Status do Pedido Atualizado' });
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Erro ao atualizar' });
+    }
+  };
+
+  const handleToggleCopyBalance = async (requestId: string, current: boolean | undefined) => {
+    if (!firestore) return;
+    try {
+        await setDoc(doc(firestore, 'copyRequests', requestId), { hasBalance: !current, updatedAt: serverTimestamp() }, { merge: true });
+        toast({ title: `Status Saldo: ${!current ? 'Com Saldo' : 'Sem Saldo'}` });
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Erro ao atualizar saldo' });
+    }
+  };
+
+  const handleDeleteCopyRequest = async (requestId: string) => {
+    if (!firestore) return;
+    try {
+        await deleteDoc(doc(firestore, 'copyRequests', requestId));
+        toast({ title: 'Registro Removido' });
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Erro ao remover' });
+    }
+  };
+
+  useEffect(() => {
+    if (sessionStatus && (sessionStatus as any).zoomLink !== undefined) {
+      setZoomLink((sessionStatus as any).zoomLink || '');
+    }
+  }, [sessionStatus]);
+
+  useEffect(() => {
+    const fetchConfigs = async () => {
+      if (!firestore || !isAdmin) return;
+      try {
+        const regSnap = await getDoc(doc(firestore, 'appConfig', 'registration'));
+        const remoteSnap = await getDoc(doc(firestore, 'appConfig', 'remoteValues'));
+        const limitSnap = await getDoc(doc(firestore, 'appConfig', 'limitation'));
+        const linksSnap = await getDoc(doc(firestore, 'appConfig', 'links'));
+        const pagesSnap = await getDoc(doc(firestore, 'appConfig', 'pages'));
+        const timeSnap = await getDoc(doc(firestore, 'appConfig', 'time'));
+        const copySnap = await getDoc(doc(firestore, 'appConfig', 'copy'));
+        const offerSnap = await getDoc(doc(firestore, 'appConfig', 'offer'));
+
+        if (regSnap.exists()) setRegSecret(regSnap.data().registrationSecret || '');
+        if (remoteSnap.exists()) {
+            setInvertSignals(remoteSnap.data().invertSignal || false);
+            setNewsWarningDuration(remoteSnap.data().newsWarningDuration || 60);
+            setOtcExcellentFrequency(remoteSnap.data().otcExcellentFrequency || 4);
+        }
+        if (limitSnap.exists()) setSignalLimit(limitSnap.data().hourlySignalLimit || 3);
+        if (linksSnap.exists()) setSupportLink(linksSnap.data().supportUrl || '');
+        
+        if (offerSnap.exists()) {
+            setVipPrice(offerSnap.data().price || 'R$ 197');
+            setVipVslId(offerSnap.data().vipVslId || '8RebjHIi7Ok');
+        }
+
+        if (copySnap.exists()) {
+            const data = copySnap.data();
+            setCopyBalance(Number(data.copyMasterBalance) || 245892.10);
+            setCopyInitialBalance(Number(data.copyInitialBalance) || 240000.00);
+            setCopyLiquidity(Number(data.copyMinLiquidity) || 1000);
+            setCopyAffUrl(data.copyAffiliateUrl || '');
+            setCopyResults(data.copyResults || []);
+            setCopyTraderName(data.copyTraderName || 'Trader Chines');
+            setCopyProfilePicUrl(data.copyProfilePicUrl || '');
+            setCopyInstagramUrl(data.copyInstagramUrl || '');
+            setCopyTikTokUrl(data.copyTikTokUrl || '');
+            setCopyTelegramUrl(data.copyTelegramUrl || '');
+            setCopyIsActive(data.copyIsActive ?? true);
+            setPrevCopyIsActive(data.copyIsActive ?? true);
+            setTgBotToken(data.tgBotToken || '');
+            setTgChatId(data.tgChatId || '');
+
+            setTgEnabled(data.tgEnabled ?? true);
+            setTgNotifyWin(data.tgNotifyWin ?? true);
+            setTgNotifyLoss(data.tgNotifyLoss ?? true);
+            setTgNotifyDraw(data.tgNotifyDraw ?? true);
+            setTgNotifyStatus(data.tgNotifyStatus ?? true);
+            setTgNotifyLeads(data.tgNotifyLeads ?? true);
+            if (data.tgMsgWin) setTgMsgWin(data.tgMsgWin);
+            if (data.tgMsgLoss) setTgMsgLoss(data.tgMsgLoss);
+            if (data.tgMsgDraw) setTgMsgDraw(data.tgMsgDraw);
+            if (data.tgMsgActive) setTgMsgActive(data.tgMsgActive);
+            if (data.tgMsgReport) setTgMsgReport(data.tgMsgReport);
+            if (data.tgMsgLead) setTgMsgLead(data.tgMsgLead);
+            if (data.tgMsgDeposit) setTgMsgDeposit(data.tgMsgDeposit);
+        }
+
+        if (timeSnap.exists()) {
+            const data = timeSnap.data();
+            if (data['EUR/USD']) {
+                const mapped: ScheduleEdit = {};
+                Object.entries(data['EUR/USD']).forEach(([day, slots]: [any, any]) => {
+                    mapped[parseInt(day)] = slots.map((s: any) => ({ start: decimalToTime(s.start), end: decimalToTime(s.end) }));
+                });
+                setEurUsdSchedule(prev => ({ ...prev, ...mapped }));
+            }
+            if (data['EUR/JPY']) {
+                const mapped: ScheduleEdit = {};
+                Object.entries(data['EUR/JPY']).forEach(([day, slots]: [any, any]) => {
+                    mapped[parseInt(day)] = slots.map((s: any) => ({ start: decimalToTime(s.start), end: decimalToTime(s.end) }));
+                });
+                setEurJpySchedule(prev => ({ ...prev, ...mapped }));
+            }
+        } else {
+            setEurUsdSchedule(IMAGE_DEFAULT_SCHEDULE);
+            setEurJpySchedule(IMAGE_DEFAULT_SCHEDULE);
+        }
+
+        if (pagesSnap.exists()) {
+            const savedData = pagesSnap.data();
+            const order = savedData.pagesOrder as string[] || DEFAULT_PAGE_LIST.map(p => p.id);
+            
+            const mergedList = order.map(id => {
+                const base = DEFAULT_PAGE_LIST.find(p => p.id === id);
+                if (!base) return null;
+                return {
+                    ...base,
+                    enabled: savedData[id] ?? base.enabled
+                };
+            }).filter(Boolean) as PageConfigItem[];
+
+            DEFAULT_PAGE_LIST.forEach(p => {
+                if (!mergedList.find(m => m.id === p.id)) {
+                    mergedList.push({ ...p, enabled: savedData[p.id] ?? p.enabled });
+                }
+            });
+
+            setPagesConfig(mergedList);
+        }
+      } catch (e) { console.error("Error fetching configs:", e); }
+    };
+    fetchConfigs();
+  }, [firestore, isAdmin]);
+
+  const handleSaveConfigs = async () => {
+    if (!firestore) return;
+    setIsConfigSaving(true);
+    try {
+      await Promise.all([
+        setDoc(doc(firestore, 'appConfig', 'registration'), { registrationSecret: regSecret.trim() }, { merge: true }),
+        setDoc(doc(firestore, 'appConfig', 'remoteValues'), { 
+            invertSignal: invertSignals,
+            newsWarningDuration: newsWarningDuration,
+            otcExcellentFrequency: otcExcellentFrequency
+        }, { merge: true }),
+        setDoc(doc(firestore, 'appConfig', 'limitation'), { hourlySignalLimit: signalLimit }, { merge: true }),
+        setDoc(doc(firestore, 'appConfig', 'links'), { supportUrl: supportLink.trim() }, { merge: true }),
+        setDoc(doc(firestore, 'appConfig', 'offer'), { price: vipPrice.trim(), vipVslId: vipVslId.trim() }, { merge: true })
+      ]);
+      toast({ title: 'Configurações Salvas' });
+    } catch (e) { toast({ variant: 'destructive', title: 'Erro ao Salvar' }); }
+    finally { setIsConfigSaving(false); }
+  };
+
+  const winRate = useMemo(() => {
+    if (copyResults.length === 0) return '0%';
+    const wins = copyResults.filter(r => r.result === 'WIN').length;
+    return ((wins / copyResults.length) * 100).toFixed(1) + '%';
+  }, [copyResults]);
+
+  const scoreboard = useMemo(() => {
+    const wins = copyResults.filter(r => r.result === 'WIN').length;
+    const losses = copyResults.filter(r => r.result === 'LOSS').length;
+    return { wins, losses };
+  }, [copyResults]);
+
+  const currentProfit = useMemo(() => {
+      return copyResults.reduce((acc, curr) => acc + curr.netChange, 0);
+  }, [copyResults]);
+
+  const sendSimpleNotification = async (message: string) => {
+    if (!tgEnabled || !tgBotToken || !tgChatId) return;
+    try {
+        await fetch(`https://api.telegram.org/bot${tgBotToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                chat_id: tgChatId,
+                text: message,
+                parse_mode: 'Markdown',
+                disable_web_page_preview: true
+            })
+        });
+    } catch (e) { console.error("Erro Telegram:", e); }
+  };
+
+  const handleSaveCopyConfigs = async () => {
+      if (!firestore) return;
+      setIsSavingCopy(true);
+      try {
+          await setDoc(doc(firestore, 'appConfig', 'copy'), {
+              copyMasterBalance: copyBalance,
+              copyInitialBalance: copyInitialBalance,
+              copyMasterProfit: currentProfit,
+              copyMasterWinRate: winRate,
+              copyMinLiquidity: copyLiquidity,
+              copyAffiliateUrl: copyAffUrl.trim(),
+              copyResults: copyResults,
+              copyTraderName: copyTraderName.trim(),
+              copyProfilePicUrl: copyProfilePicUrl.trim(),
+              copyInstagramUrl: copyInstagramUrl.trim(),
+              copyTikTokUrl: copyTikTokUrl.trim(),
+              copyTelegramUrl: copyTelegramUrl.trim(),
+              copyIsActive: copyIsActive,
+              tgBotToken: tgBotToken.trim(),
+              tgChatId: tgChatId.trim(),
+              tgEnabled,
+              tgNotifyWin,
+              tgNotifyLoss,
+              tgNotifyDraw,
+              tgNotifyStatus,
+              tgNotifyLeads,
+              tgMsgWin,
+              tgMsgLoss,
+              tgMsgDraw,
+              tgMsgActive,
+              tgMsgReport,
+              tgMsgLead,
+              tgMsgDeposit
+          }, { merge: true });
+
+          if (tgNotifyStatus && copyIsActive !== prevCopyIsActive) {
+              if (copyIsActive) {
+                  const msg = tgMsgActive.replace('{{url}}', `${window.location.origin}/copy`);
+                  sendSimpleNotification(msg);
+              } else {
+                  const profitText = currentProfit >= 0 ? `+ ${formatCurrency(currentProfit)}` : formatCurrency(currentProfit);
+                  const msg = tgMsgReport
+                    .replace('{{wins}}', scoreboard.wins.toString())
+                    .replace('{{losses}}', scoreboard.losses.toString())
+                    .replace('{{profit}}', profitText)
+                    .replace('{{winrate}}', winRate)
+                    .replace('{{url}}', `${window.location.origin}/copy`);
+                  sendSimpleNotification(msg);
+              }
+              setPrevCopyIsActive(copyIsActive);
+          }
+
+          toast({ title: 'Copy Trade Atualizado' });
+      } catch (e) { toast({ variant: 'destructive', title: 'Erro ao salvar copy' }); }
+      finally { setIsSavingCopy(false); }
+  };
+
+  const sendTelegramTradeNotification = async (asset: string, direction: string, result: string, profit: number) => {
+    if (!tgEnabled || !tgBotToken || !tgChatId) return;
+
+    let msg = '';
+    const profitText = profit >= 0 ? `+ ${formatCurrency(profit)}` : formatCurrency(profit);
+    const url = `${window.location.origin}/copy`;
+
+    if (result === 'WIN' && tgNotifyWin) {
+        msg = tgMsgWin.replace('{{asset}}', asset).replace('{{direction}}', direction).replace('{{profit}}', profitText).replace('{{url}}', url);
+    } else if (result === 'LOSS' && tgNotifyLoss) {
+        msg = tgMsgLoss.replace('{{asset}}', asset).replace('{{direction}}', direction).replace('{{profit}}', profitText).replace('{{url}}', url);
+    } else if (result === 'DRAW' && tgNotifyDraw) {
+        msg = tgMsgDraw.replace('{{asset}}', asset).replace('{{direction}}', direction).replace('{{url}}', url);
+    }
+
+    if (msg) sendSimpleNotification(msg);
+  };
+
+  const handlePostTrade = async (result: 'WIN' | 'LOSS' | 'DRAW') => {
+      const netChange = result === 'WIN' 
+          ? (tradeValue * tradePayout / 100) 
+          : (result === 'LOSS' ? -tradeValue : 0);
+      
+      let updatedResults;
+      let newBalance;
+
+      if (editingTradeId) {
+          const oldTrade = copyResults.find(r => r.id === editingTradeId);
+          const baseBalance = oldTrade ? copyBalance - oldTrade.netChange : copyBalance;
+          
+          const updatedTrade: CopyTradeResult = {
+              id: editingTradeId,
+              asset: tradeAsset,
+              direction: tradeDirection,
+              result,
+              time: tradeTime,
+              date: tradeDate,
+              netChange,
+              value: tradeValue
+          };
+
+          updatedResults = copyResults.map(r => r.id === editingTradeId ? updatedTrade : r);
+          newBalance = baseBalance + netChange;
+      } else {
+          const newResult: CopyTradeResult = {
+              id: Date.now().toString(),
+              asset: tradeAsset,
+              direction: tradeDirection,
+              result,
+              time: tradeTime || new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+              date: tradeDate || new Date().toISOString().split('T')[0],
+              netChange,
+              value: tradeValue
+          };
+          updatedResults = [newResult, ...copyResults];
+          newBalance = copyBalance + netChange;
+      }
+
+      updatedResults.sort((a, b) => {
+          const dateTimeA = new Date(`${a.date}T${a.time}`).getTime();
+          const dateTimeB = new Date(`${b.date}T${b.time}`).getTime();
+          return dateTimeB - dateTimeA;
+      });
+      
+      setCopyBalance(newBalance);
+      setCopyResults(updatedResults);
+      setEditingTradeId(null);
+
+      if (firestore) {
+          try {
+              const wins = updatedResults.filter(r => r.result === 'WIN').length;
+              const newWinRate = updatedResults.length > 0 ? ((wins / updatedResults.length) * 100).toFixed(1) + '%' : '0%';
+              const newProfit = updatedResults.reduce((acc, curr) => acc + curr.netChange, 0);
+
+              await setDoc(doc(firestore, 'appConfig', 'copy'), {
+                  copyMasterBalance: newBalance,
+                  copyMasterProfit: newProfit,
+                  copyMasterWinRate: newWinRate,
+                  copyResults: updatedResults
+              }, { merge: true });
+
+              sendTelegramTradeNotification(tradeAsset, tradeDirection, result, netChange);
+
+              toast({ 
+                  title: editingTradeId ? 'Operação Atualizada!' : `Operação ${result} Lançada!`, 
+                  description: `${tradeAsset} ${tradeDirection}: ${netChange > 0 ? '+' : ''}${formatCurrency(netChange)}` 
+              });
+          } catch (e) {
+              toast({ variant: 'destructive', title: 'Erro ao registrar operação' });
+          }
+      }
+  };
+
+  const startEditingTrade = (trade: CopyTradeResult) => {
+      setEditingTradeId(trade.id);
+      setTradeAsset(trade.asset);
+      setTradeDirection(trade.direction);
+      setTradeValue(trade.value);
+      setTradeTime(trade.time);
+      setTradeDate(trade.date);
+      toast({ title: 'Editando Operação', description: `Ajuste os dados e salve clicando em WIN, LOSS ou EMPATE.` });
+  };
+
+  const removeTradeResult = async (id: string) => {
+      const tradeToRemove = copyResults.find(r => r.id === id);
+      if (!tradeToRemove) return;
+
+      const updatedResults = copyResults.filter(r => r.id !== id);
+      const updatedBalance = copyBalance - tradeToRemove.netChange;
+      
+      setCopyResults(updatedResults);
+      setCopyBalance(updatedBalance);
+
+      if (firestore) {
+          try {
+              const wins = updatedResults.filter(r => r.result === 'WIN').length;
+              const newWinRate = updatedResults.length > 0 ? ((wins / updatedResults.length) * 100).toFixed(1) + '%' : '0%';
+              const newProfit = updatedResults.reduce((acc, curr) => acc + curr.netChange, 0);
+
+              await setDoc(doc(firestore, 'appConfig', 'copy'), {
+                  copyMasterBalance: updatedBalance,
+                  copyMasterProfit: newProfit,
+                  copyMasterWinRate: newWinRate,
+                  copyResults: updatedResults
+              }, { merge: true });
+              toast({ title: 'Operação Removida' });
+          } catch (e) {
+              toast({ variant: 'destructive', title: 'Erro ao remover' });
+          }
+      }
+  };
+
+  const masterStats = {
+      balance: copyBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      initialBalance: copyInitialBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      profitTotal: (currentProfit >= 0 ? '+ ' : '') + (currentProfit).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+      winRate: winRate,
+      isActive: copyIsActive
+  };
+
+  const handleSaveTime = async () => {
+    if (!firestore) return;
+    setIsSavingTime(true);
+    try {
+        const convertToDb = (edit: ScheduleEdit) => {
+            const db: any = {};
+            Object.entries(edit).forEach(([day, slots]) => {
+                if (slots.length > 0) {
+                    db[day] = slots.map(s => ({ start: timeToDecimal(s.start), end: timeToDecimal(s.end) }));
+                } else {
+                    db[day] = [];
+                }
+            });
+            return db;
+        };
+
+        const update = {
+            'EUR/USD': convertToDb(eurUsdSchedule),
+            'EUR/JPY': convertToDb(eurJpySchedule)
+        };
+        
+        await setDoc(doc(firestore, 'appConfig', 'time'), update, { merge: true });
+        toast({ title: 'Horários do Mercado Atualizados' });
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Erro ao salvar horários' });
+    } finally {
+        setIsSavingTime(false);
+    }
+  };
+
+  const handleLoadImageDefault = (target: 'USD' | 'JPY') => {
+      const setter = target === 'USD' ? setEurUsdSchedule : setEurJpySchedule;
+      setter(IMAGE_DEFAULT_SCHEDULE);
+      toast({ title: 'Padrão da Imagem Carregado', description: 'Clique em salvar para aplicar no sistema.' });
+  };
+
+  const addSlot = (target: 'USD' | 'JPY', day: number) => {
+      const setter = target === 'USD' ? setEurUsdSchedule : setEurJpySchedule;
+      setter(prev => ({
+          ...prev,
+          [day]: [...(prev[day] || []), { start: '08:00', end: '17:00' }]
+      }));
+  };
+
+  const removeSlot = (target: 'USD' | 'JPY', day: number, index: number) => {
+      const setter = target === 'USD' ? setEurUsdSchedule : setEurJpySchedule;
+      setter(prev => ({
+          ...prev,
+          [day]: prev[day].filter((_, i) => i !== index)
+      }));
+  };
+
+  const updateSlot = (target: 'USD' | 'JPY', day: number, index: number, field: 'start' | 'end', value: string) => {
+      const setter = target === 'USD' ? setEurUsdSchedule : setEurJpySchedule;
+      setter(prev => ({
+          ...prev,
+          [day]: prev[day].map((s, i) => i === index ? { ...s, [field]: value } : s)
+      }));
+  };
+
+  const handleSavePages = async () => {
+    if (!firestore) return;
+    setIsSavingPages(true);
+    try {
+        const pagesUpdate: any = {
+            pagesOrder: pagesConfig.map(p => p.id)
+        };
+        pagesConfig.forEach(p => {
+            pagesUpdate[p.id] = p.enabled;
+        });
+
+        await setDoc(doc(firestore, 'appConfig', 'pages'), pagesUpdate);
+        toast({ title: 'Acessos e Ordem Atualizados' });
+    } catch (e) {
+        toast({ variant: 'destructive', title: 'Erro ao salvar acessos' });
+    } finally {
+        setIsSavingPages(false);
+    }
+  };
+
+  const movePage = (index: number, direction: 'up' | 'down') => {
+    const newList = [...pagesConfig];
+    const nIndex = direction === 'up' ? index - 1 : index + 1;
+    
+    if (nIndex < 0 || nIndex >= newList.length) return;
+    
+    const temp = newList[index];
+    newList[index] = newList[nIndex];
+    newList[nIndex] = temp;
+    
+    setPagesConfig(newList);
+  };
+
+  const handleTogglePage = (id: string) => {
+    setPagesConfig(prev => prev.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
+  };
+
+  const handleToggleSession = async (current: boolean | undefined) => {
+    if (!firestore) return;
+    try {
+      await setDoc(doc(firestore, 'session', 'status'), { isOnline: !current }, { merge: true });
+      toast({ title: `Sessão ${!current ? 'Online' : 'Offline'}` });
+    } catch (e) { toast({ variant: 'destructive', title: 'Erro ao alternar sessão' }); }
+  };
+
+  const handleSaveZoomLink = async () => {
+    if (!firestore) return;
+    setIsSavingLink(true);
+    try {
+      await setDoc(doc(firestore, 'session', 'status'), { zoomLink: zoomLink.trim() }, { merge: true });
+      toast({ title: 'Link da Sessão Atualizado' });
+    } catch (e) { toast({ variant: 'destructive', title: 'Erro ao salvar link' }); }
+    finally { setIsSavingLink(false); }
+  };
+
+  const handleUpdateScore = async (field: 'wins' | 'losses', newValue: number) => {
+    if (!firestore) return;
+    try {
+      await setDoc(doc(firestore, 'session', 'monthly_score'), { [field]: Math.max(0, newValue) }, { merge: true });
+      toast({ title: 'Placar Atualizado' });
+    } catch (e) { toast({ variant: 'destructive', title: 'Erro ao atualizar placar' }); }
+  };
+
+  const handleResetStats = async () => {
+    if (!firestore) return;
+    setIsResetting(true);
+    try {
+      await setDoc(doc(firestore, 'appConfig', 'analytics'), { visitCount: 0, checkoutClickCount: 0 });
+      toast({ title: 'Estatísticas Zeradas' });
+      setIsResetDialogOpen(false);
+    } catch (e) { toast({ variant: 'destructive', title: 'Erro ao Resetar' }); }
+    finally { setIsResetting(false); }
+  };
+
+  const usersQuery = useMemoFirebase(() => {
+    if (!firestore || !isAdmin) return null;
+    return collection(firestore, 'users');
+  }, [firestore, isAdmin]);
+
+  const requestsQuery = useMemoFirebase(() => {
+    if (!firestore || !isAdmin) return null;
+    return collection(firestore, 'vipRequests');
+  }, [firestore, isAdmin]);
+
+  const { data: rawUsers, isLoading: isUsersLoading } = useCollection(usersQuery);
+  const { data: rawRequests, isLoading: isRequestsLoading } = useCollection(requestsQuery);
+
+  useEffect(() => {
+    if (!isUserLoading && !isAdmin) router.push('/login');
+  }, [isAdmin, isUserLoading, router]);
+
+  const handleToggleAccount = async (userId: string, currentStatus: string | undefined, email: string) => {
+    if (!firestore) return;
+    const newStatus = currentStatus === 'DISABLED' ? 'ACTIVE' : 'DISABLED';
+    try {
+      await setDoc(doc(firestore, 'users', userId), { 
+        accountStatus: newStatus,
+        email: email === '---' ? (userId + "@lead.com") : email,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+      toast({ title: 'Status Alterado' });
+    } catch (e) { toast({ variant: 'destructive', title: 'Erro' }); }
+  };
+
+  const handleUpdateRating = async (userId: string, rating: number) => {
+    if (!firestore) return;
+    try {
+      await setDoc(doc(firestore, 'users', userId), { rating }, { merge: true });
+      toast({ title: `Avaliação: ${rating} Estrelas` });
+    } catch (e) { toast({ variant: 'destructive', title: 'Erro ao avaliar' }); }
+  };
+
+  const handleUpdateVipStatus = async (userId: string, email: string, newStatus: string) => {
+    if (!firestore) return;
+    
+    try {
+      if (newStatus === 'VIP_RESET') {
+        await deleteDoc(doc(firestore, 'vipRequests', userId)).catch(() => {});
+        await setDoc(doc(firestore, 'users', userId), { 
+          subscriptionStatus: 'ACTIVE',
+          updatedAt: serverTimestamp() 
+        }, { merge: true });
+        toast({ title: 'Conta Resetada para VIP' });
+        return;
+      }
+
+      const isPremiumStatus = newStatus === 'PREMIUM' || newStatus === 'APPROVED';
+      const subStatus = isPremiumStatus ? 'ACTIVE' : 'INACTIVE';
+      
+      await setDoc(doc(firestore, 'vipRequests', userId), { 
+        status: newStatus, 
+        userId, 
+        userEmail: email === '---' ? "" : email, 
+        updatedAt: serverTimestamp() 
+      }, { merge: true });
+      
+      await setDoc(doc(firestore, 'users', userId), { 
+        subscriptionStatus: subStatus, 
+        email: email === '---' ? "" : email, 
+        updatedAt: serverTimestamp() 
+      }, { merge: true });
+      
+      toast({ title: 'Status Atualizado' });
+    } catch (e) { 
+        console.error(e);
+        toast({ variant: 'destructive', title: 'Erro ao atualizar' }); 
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!firestore || !deleteUserId) return;
+    setIsDeleting(true);
+    try {
+      await deleteDoc(doc(firestore, 'users', deleteUserId));
+      await deleteDoc(doc(firestore, 'vipRequests', deleteUserId)).catch(() => {});
+      toast({ title: 'Registo Excluído' });
+      setDeleteUserId(null);
+    } catch (e) { toast({ variant: 'destructive', title: 'Erro' }); }
+    finally { setIsDeleting(false); }
+  };
+
+  const mergedUsers = useMemo(() => {
+    if (!rawUsers && !rawRequests) return [];
+
+    const allIds = new Set([...(rawUsers?.map(u => u.id) || []), ...(rawRequests?.map(r => r.id) || [])]);
+
+    return Array.from(allIds)
+    .map(id => {
+      const u = rawUsers?.find(userDoc => userDoc.id === id);
+      const r = rawRequests?.find(reqDoc => reqDoc.id === id);
+      const email = u?.email || r?.userEmail || (r as any).email || '---';
+      const vipStatus = r?.status || 'NENHUM';
+      const createdAt = u?.createdAt || r?.submittedAt || null;
+      const lastActivity = u?.updatedAt || r?.updatedAt || u?.createdAt || r?.submittedAt || null;
+      
+      let isNew = false;
+      let diffDays = 0;
+      if (createdAt) {
+          const date = (createdAt as any).seconds ? new Date((createdAt as any).seconds * 1000) : new Date(createdAt as any);
+          diffDays = Math.floor(Math.abs(Date.now() - date.getTime()) / (1000 * 60 * 60 * 24));
+          isNew = diffDays <= 8;
+      }
+
+      return {
+        id, email, createdAt, lastActivity, brokerId: r?.brokerId || '---',
+        accountStatus: u?.accountStatus || 'ACTIVE',
+        subscriptionStatus: vipStatus === 'NENHUM' ? 'VIP' : (vipStatus === 'APPROVED' || vipStatus === 'PREMIUM' ? 'PREMIUM' : vipStatus),
+        rawStatus: vipStatus, rating: u?.rating || 0,
+        isPremium: vipStatus === 'PREMIUM' || vipStatus === 'APPROVED',
+        isPending: vipStatus === 'PENDING',
+        isDepositPending: vipStatus === 'DEPOSIT_PENDING',
+        isAwaitingDeposit: vipStatus === 'AWAITING_DEPOSIT',
+        isRejected: vipStatus === 'REJECTED', isNew, daysSince: diffDays, isGhost: !u,
+        userOrigin: u?.userOrigin || 'ANALYZER',
+        balance: u?.balance ?? (r as any)?.balance ?? 0
+      };
+    })
+    .filter(u => {
+      if (u.userOrigin === 'COPY') return false;
+
+      const search = searchTerm.toLowerCase();
+      const matchesSearch = !searchTerm || (u.email?.toLowerCase().includes(search) || u.brokerId?.toLowerCase().includes(search) || u.id.toLowerCase().includes(search));
+      if (!matchesSearch) return false;
+      if (activeFilter === 'PENDING') return u.isPending;
+      if (activeFilter === 'DEPOSIT') return u.isDepositPending;
+      if (activeFilter === 'PREMIUM') return u.isPremium;
+      if (activeFilter === 'SUSPENDED') return u.accountStatus === 'DISABLED';
+      if (activeFilter === 'REJECTED') return u.isRejected;
+      return true;
+    })
+    .sort((a, b) => {
+      let valA = a[sortConfig.key as keyof typeof a] as any;
+      let valB = b[sortConfig.key as keyof typeof b] as any;
+      
+      if (sortConfig.key === 'idCorretora') {
+          valA = a.brokerId;
+          valB = b.brokerId;
+      } else if (sortConfig.key === 'status') {
+          valA = a.accountStatus;
+          valB = b.accountStatus;
+      } else if (sortConfig.key === 'plano') {
+          valA = a.subscriptionStatus;
+          valB = b.subscriptionStatus;
+      }
+
+      if (valA?.seconds) valA = valA.seconds;
+      if (valB?.seconds) valB = valB.seconds;
+      if (valA === null || valA === undefined) valA = '';
+      if (valB === null || valB === undefined) valB = '';
+      
+      if (typeof valA === 'string' && typeof valB === 'string') {
+          return sortConfig.direction === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+      }
+      
+      return sortConfig.direction === 'asc' ? (valA < valB ? -1 : 1) : (valA > valB ? -1 : 1);
+    });
+  }, [rawUsers, rawRequests, searchTerm, sortConfig, activeFilter]);
+
+  const stats = useMemo(() => ({
+    total: mergedUsers.length,
+    pending: mergedUsers.filter(u => u.isPending).length,
+    deposit: mergedUsers.filter(u => u.isDepositPending).length,
+    premium: mergedUsers.filter(u => u.isPremium).length,
+    suspended: mergedUsers.filter(u => u.accountStatus === 'DISABLED').length,
+    rejected: mergedUsers.filter(u => u.isRejected).length,
+  }), [mergedUsers]);
+
+  const pageClicks = useMemo(() => {
+    if (!config) return [];
+    return Object.keys(config)
+      .filter(key => key.startsWith('clicks_'))
+      .map(key => ({
+        page: key.replace('clicks_', '').replace('home', 'Início').replace('analisador', 'Analisador').replace('vip', 'Página VIP').replace('sessaochinesa', 'Sessão Chinesa').replace('copy', 'Copy Trade'),
+        count: config[key] || 0
+      }))
+      .sort((a, b) => b.count - a.count);
+  }, [config]);
+
+  const formatDate = (ts: any) => {
+    if (!ts) return '---';
+    const date = ts.seconds ? new Date(ts.seconds * 1000) : new Date(ts);
+    return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
+
+  const getPlanBadgeStyles = (rawStatus: string) => {
+    if (rawStatus === 'PREMIUM' || rawStatus === 'APPROVED') return 'bg-purple-600 text-white';
+    if (rawStatus === 'PENDING') return 'bg-orange-500 text-white';
+    if (rawStatus === 'AWAITING_DEPOSIT') return 'bg-cyan-500 text-black';
+    if (rawStatus === 'DEPOSIT_PENDING') return 'bg-emerald-500 text-black';
+    if (rawStatus === 'REJECTED') return 'bg-red-600 text-white';
+    return 'bg-yellow-500 text-black';
+  };
+
+  const getStatusLabel = (rawStatus: string) => {
+      if (rawStatus === 'PENDING') return 'PENDENTE';
+      if (rawStatus === 'AWAITING_DEPOSIT') return 'AGUARD. DEPÓSITO';
+      if (rawStatus === 'DEPOSIT_PENDING') return 'DEPÓSITO PENDENTE';
+      if (rawStatus === 'APPROVED' || rawStatus === 'PREMIUM') return 'PREMIUM';
+      if (rawStatus === 'REJECTED') return 'RECUSADO';
+      return 'VIP';
+  };
+
+  const renderScheduleEditor = (target: 'USD' | 'JPY') => {
+      const schedule = target === 'USD' ? eurUsdSchedule : eurJpySchedule;
+      return (
+          <div className="space-y-2 max-h-[500px] overflow-y-auto no-scrollbar pr-2">
+              {[6, 0, 1, 2, 3, 4, 5].map(day => (
+                  <div key={day} className="flex flex-col md:flex-row md:items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5 gap-3">
+                      <div className="flex items-center justify-between md:min-w-[120px]">
+                          <span className={cn(
+                              "text-[0.7rem] font-black uppercase tracking-tight",
+                              day === 6 ? "text-red-500" : "text-primary/70"
+                          )}>
+                              {DAY_NAMES[day]}
+                          </span>
+                          <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 rounded-full bg-primary/10 text-primary md:hidden" 
+                              onClick={() => addSlot(target, day)}
+                          >
+                              <Plus className="h-3.5 w-3.5" />
+                          </Button>
+                      </div>
+                      
+                      <div className="flex-grow flex flex-wrap items-center gap-2">
+                          {schedule[day] && schedule[day].length > 0 ? schedule[day].map((slot, idx) => (
+                              <div key={idx} className="flex items-center gap-1.5 bg-black/40 p-1.5 rounded-lg border border-white/10 animate-in zoom-in-95">
+                                  <Input 
+                                      type="time" 
+                                      value={slot.start} 
+                                      onChange={(e) => updateSlot(target, day, idx, 'start', e.target.value)}
+                                      className="h-7 w-[75px] bg-transparent border-none text-[0.7rem] p-0 text-center font-mono"
+                                  />
+                                  <span className="text-[0.6rem] opacity-30 uppercase font-black tracking-tighter">até</span>
+                                  <Input 
+                                      type="time" 
+                                      value={slot.end} 
+                                      onChange={(e) => updateSlot(target, day, idx, 'end', e.target.value)}
+                                      className="h-7 w-[75px] bg-transparent border-none text-[0.7rem] p-0 text-center font-mono"
+                                  />
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-500/50 hover:text-red-500" onClick={() => removeSlot(target, day, idx)}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                              </div>
+                          )) : (
+                              <div className="h-10 flex items-center justify-center flex-grow italic opacity-30 text-[0.65rem] font-bold uppercase tracking-widest bg-black/20 rounded-lg border border-dashed border-white/5">
+                                  Mercado Fechado / Apenas OTC
+                              </div>
+                          )}
+                      </div>
+
+                      <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-9 w-9 rounded-full bg-primary/10 text-primary hidden md:flex" 
+                          onClick={() => addSlot(target, day)}
+                      >
+                          <Plus className="h-4 w-4" />
+                      </Button>
+                  </div>
+              ))}
+          </div>
+      );
+  };
+
+  if (isUserLoading || !user || !isAdmin) {
+    return <div className="flex h-screen w-full items-center justify-center bg-[#0a0a0a]"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-[#0a0a0a] text-foreground font-body pb-20">
+      <header className="border-b border-white/5 bg-black/40 backdrop-blur-md sticky top-0 z-50">
+        <div className="container mx-auto px-6 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <LayoutDashboard className="h-6 w-6 text-primary" />
+            <h1 className="text-xl md:text-2xl font-headline font-black tracking-tight uppercase">Gestão Estratégia Chinesa</h1>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => auth.signOut()} className="rounded-full border border-white/10">
+            <LogOut className="h-4 w-4 mr-2" /> Sair
+          </Button>
+        </div>
+      </header>
+
+      <main className="container mx-auto p-6 space-y-8 pb-20">
+        
+        {/* STATS BAR */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-4">
+             {[
+                 { label: 'Cliques Totais', value: config?.checkoutClickCount || 0, icon: MousePointer2, color: 'text-blue-400', onClick: () => setIsClicksDialogOpen(true) },
+                 { label: 'Pendentes', value: stats.pending, icon: Timer, color: stats.pending > 0 ? 'text-orange-500 animate-pulse' : 'text-zinc-500' },
+                 { label: 'Depósitos', value: stats.deposit, icon: RefreshCcw, color: stats.deposit > 0 ? 'text-emerald-500 animate-pulse' : 'text-zinc-500' },
+                 { label: 'Total Membros', value: stats.total, icon: Users, color: 'text-primary' },
+                 { label: 'Recusados', value: stats.rejected, icon: Ban, color: 'text-red-500' },
+                 { label: 'Suspensos', value: stats.suspended, icon: ShieldOff, color: 'text-zinc-500' },
+             ].map((s, i) => (
+                <Card 
+                    key={i} 
+                    onClick={s.onClick}
+                    className={cn(
+                        "bg-card/30 border-white/5 p-4 flex items-center gap-4 transition-all",
+                        (s.label === 'Pendentes' && stats.pending > 0) && "border-orange-500/20 bg-orange-500/5",
+                        (s.label === 'Depósitos' && stats.deposit > 0) && "border-emerald-500/20 bg-emerald-500/5",
+                        s.onClick && "cursor-pointer hover:bg-white/5 hover:border-white/10"
+                    )}
+                >
+                    <div className={cn("p-2 rounded-xl bg-white/5", s.color)}><s.icon className="h-5 w-5" /></div>
+                    <div>
+                        <p className="text-[0.6rem] font-black uppercase tracking-widest opacity-40">{s.label}</p>
+                        <p className="text-xl font-headline font-black">{s.value}</p>
+                    </div>
+                </Card>
+             ))}
+        </div>
+
+        {/* TOP CARDS ROW */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            {/* CONTROLO DE SESSÃO CHINESA */}
+            <Card className="bg-card/40 border-white/5 p-6 rounded-2xl lg:col-span-1">
+                <div className="flex items-center gap-2 mb-6">
+                    <Tv className="h-5 w-5 text-primary" />
+                    <h2 className="text-sm font-black uppercase tracking-widest">Sessão Chinesa</h2>
+                </div>
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/5">
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold uppercase">Status Live</span>
+                            <span className={cn("text-[0.6rem] font-black", (sessionStatus as any)?.isOnline ? "text-green-500" : "text-red-500")}>
+                                {(sessionStatus as any)?.isOnline ? 'SESSÃO ONLINE' : 'SESSÃO OFFLINE'}
+                            </span>
+                        </div>
+                        <Switch checked={(sessionStatus as any)?.isOnline || false} onCheckedChange={() => handleToggleSession((sessionStatus as any)?.isOnline)} />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5"><LinkIcon className="h-3 w-3"/> Link da Sala (Zoom/Meet)</Label>
+                        <div className="flex gap-2">
+                          <Input 
+                            value={zoomLink} 
+                            onChange={(e) => setZoomLink(e.target.value)} 
+                            placeholder="https://zoom.us/j/..." 
+                            className="bg-white/5 border-white/10 h-10 text-xs" 
+                          />
+                          <Button 
+                            size="sm" 
+                            onClick={handleSaveZoomLink} 
+                            disabled={isSavingLink}
+                            className="bg-primary text-black h-10 px-4"
+                          >
+                            {isSavingLink ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-[0.6rem] font-bold uppercase opacity-60">Wins (Mês)</Label>
+                            <div className="flex items-center gap-2">
+                                <Button size="icon" variant="outline" className="h-10 w-10" onClick={() => handleUpdateScore('wins', ((sessionScore as any)?.wins || 0) - 1)} disabled={((sessionScore as any)?.wins || 0) <= 0}><Minus className="h-4 w-4" /></Button>
+                                <Input readOnly value={(sessionScore as any)?.wins || 0} className="bg-white/5 border-white/10 text-center text-green-500 font-black" />
+                                <Button size="icon" variant="outline" className="h-10 w-10" onClick={() => handleUpdateScore('wins', ((sessionScore as any)?.wins || 0) + 1)}><Plus className="h-4 w-4" /></Button>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[0.6rem] font-bold uppercase opacity-60">Losses (Mês)</Label>
+                            <div className="flex items-center gap-2">
+                                <Button size="icon" variant="outline" className="h-10 w-10" onClick={() => handleUpdateScore('losses', ((sessionScore as any)?.losses || 0) - 1)} disabled={((sessionScore as any)?.losses || 0) <= 0}><Minus className="h-4 w-4" /></Button>
+                                <Input readOnly value={(sessionScore as any)?.losses || 0} className="bg-white/5 border-white/10 text-center text-red-500 font-black" />
+                                <Button size="icon" variant="outline" className="h-10 w-10" onClick={() => handleUpdateScore('losses', ((sessionScore as any)?.losses || 0) + 1)}><Plus className="h-4 w-4" /></Button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </Card>
+
+            {/* HORÁRIOS DO MERCADO */}
+            <Card className="bg-card/40 border-white/5 p-6 rounded-2xl lg:col-span-2">
+                <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
+                    <div className="flex items-center gap-2">
+                        <CalendarClock className="h-5 w-5 text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-widest">Horários Mercado (Sincronização)</h2>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleLoadImageDefault('USD')} 
+                            className="h-8 text-[0.6rem] font-black uppercase tracking-widest bg-white/5 hover:bg-white/10 border-white/10"
+                        >
+                            <RotateCcw className="h-3 w-3 mr-1.5" /> Padrão Imagem
+                        </Button>
+                        <Button 
+                            size="sm" 
+                            onClick={handleSaveTime} 
+                            disabled={isSavingTime} 
+                            className="h-8 bg-primary text-black font-black uppercase tracking-widest hover:bg-primary/90"
+                        >
+                            {isSavingTime ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-1.5" /> Salvar Horários</>}
+                        </Button>
+                    </div>
+                </div>
+                
+                <Tabs defaultValue="EUR/USD" className="w-full">
+                    <TabsList className="grid w-full grid-cols-2 bg-black/40 border border-white/5 rounded-xl h-12 mb-4">
+                        <TabsTrigger value="EUR/USD" className="text-[0.65rem] font-black uppercase tracking-widest">EUR/USD (Dólar)</TabsTrigger>
+                        <TabsTrigger value="EUR/JPY" className="text-[0.65rem] font-black uppercase tracking-widest">EUR/JPY (Iene)</TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="EUR/USD" className="mt-0 outline-none">
+                        {renderScheduleEditor('USD')}
+                    </TabsContent>
+                    
+                    <TabsContent value="EUR/JPY" className="mt-0 outline-none">
+                        {renderScheduleEditor('JPY')}
+                    </TabsContent>
+                </Tabs>
+                
+                <div className="mt-6 flex items-start gap-3 p-4 bg-primary/5 rounded-xl border border-primary/20">
+                    <AlertCircle className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <p className="text-[0.65rem] text-primary/70 font-bold uppercase tracking-tight leading-relaxed">
+                        Defina os horários em que o mercado real está <span className="text-primary underline">ABERTO</span>. 
+                        Fora desses intervalos, o analisador forçará o modo OTC automaticamente. 
+                        Como o mercado fecha diariamente entre 17h e 21h, adicione dois intervalos para segunda a quinta.
+                    </p>
+                </div>
+            </Card>
+
+            {/* CONFIGURAÇÃO COPY TRADE */}
+            <Card className="bg-card/40 border-white/5 p-6 rounded-2xl lg:col-span-2">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-widest">Copy Trade Control</h2>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+                            <span className="text-[0.6rem] font-black uppercase opacity-60">Status Copy</span>
+                            <Switch checked={copyIsActive} onCheckedChange={setCopyIsActive} className="scale-75" />
+                        </div>
+                        <Button size="sm" onClick={handleSaveCopyConfigs} disabled={isSavingCopy} className="h-9 px-4 rounded-xl font-bold bg-primary text-black hover:bg-primary/90">
+                            {isSavingCopy ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Save className="h-4 w-4 mr-1.5" /> Salvar Configs</>}
+                        </Button>
+                    </div>
+                </div>
+
+                <Tabs defaultValue="aprovados" className="w-full">
+                    <TabsList className="grid w-full grid-cols-5 bg-black/40 border border-white/5 rounded-xl h-10 mb-4">
+                        <TabsTrigger value="aprovados" className="text-[0.6rem] font-black uppercase tracking-widest relative">
+                            Aprovados
+                        </TabsTrigger>
+                        <TabsTrigger value="autorizar" className="text-[0.6rem] font-black uppercase tracking-widest"><UserPlus className="h-3 w-3 mr-1" /> Autorizar</TabsTrigger>
+                        <TabsTrigger value="operacoes" className="text-[0.6rem] font-black uppercase tracking-widest">Operações</TabsTrigger>
+                        <TabsTrigger value="bots" className="text-[0.6rem] font-black uppercase tracking-widest">Bots</TabsTrigger>
+                        <TabsTrigger value="perfil" className="text-[0.6rem] font-black uppercase tracking-widest">Perfil</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="autorizar" className="space-y-4">
+                        <div className="p-4 bg-white/5 border border-white/5 rounded-2xl space-y-4">
+                            <h3 className="text-[0.7rem] font-black uppercase tracking-widest text-primary flex items-center gap-2"><UserPlus className="h-4 w-4" /> Liberar Novo ID</h3>
+                            <div className="flex gap-2">
+                                <Input 
+                                    placeholder="ID da Corretora" 
+                                    value={newAuthId} 
+                                    onChange={(e) => setNewAuthId(e.target.value.replace(/\D/g, ''))}
+                                    className="bg-black/40 border-white/10"
+                                />
+                                <Button onClick={handleAuthorizeId} disabled={newAuthId.length < 8 || isAuthorizing} className="bg-primary text-black font-bold">
+                                    {isAuthorizing ? <Loader2 className="h-4 w-4 animate-spin" /> : 'AUTORIZAR ID'}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <h3 className="text-[0.6rem] font-black uppercase tracking-widest opacity-40">IDs Autorizados (Não Cadastrados)</h3>
+                            <div className="max-h-[300px] overflow-y-auto space-y-1">
+                                {copyRequests && copyRequests.filter(r => r.status === 'AUTHORIZED').map(req => (
+                                    <div key={req.id} className="p-3 bg-white/5 rounded-xl border border-white/5 flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <ShieldCheck className="h-4 w-4 text-primary" />
+                                            <span className="font-mono text-xs font-bold text-white">{req.brokerId}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <Badge className="bg-primary/20 text-primary text-[0.5rem] uppercase">LIBERADO</Badge>
+                                            <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500/50" onClick={() => handleDeleteCopyRequest(req.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="aprovados" className="space-y-4">
+                        <div className="max-h-[500px] overflow-y-auto space-y-3 pr-1">
+                            {copyRequests && copyRequests.filter(r => r.status === 'REGISTERED').length > 0 ? copyRequests.filter(r => r.status === 'REGISTERED').map((req) => (
+                                <div key={req.id} className="p-4 bg-white/5 border border-white/5 rounded-2xl flex flex-col gap-3 group hover:border-primary/20 transition-all">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-green-500/10 rounded-full"><UserIcon className="h-4 w-4 text-green-500" /></div>
+                                            <div className="flex flex-col">
+                                                <span className="text-xs font-black text-white uppercase">{req.name || 'Sem Nome'}</span>
+                                                <span className="text-[0.6rem] font-mono opacity-40">{req.email || 'Sem Email'}</span>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 bg-black/20 px-3 py-1.5 rounded-full border border-white/5">
+                                                <span className={cn("text-[0.6rem] font-black uppercase", req.hasBalance ? "text-green-500" : "text-red-500")}>
+                                                    {req.hasBalance ? "(COM SALDO)" : "(SEM SALDO)"}
+                                                </span>
+                                                <Switch checked={req.hasBalance || false} onCheckedChange={() => handleToggleCopyBalance(req.id, req.hasBalance)} className="scale-50 origin-right" />
+                                            </div>
+                                            <Badge className="text-[0.5rem] font-black uppercase bg-green-500 text-white">
+                                                SINCRONIZADO
+                                            </Badge>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7"><MoreVertical className="h-3.5 w-3.5" /></Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="bg-black/95 border-white/10">
+                                                    <DropdownMenuItem onClick={() => handleUpdateCopyRequest(req.id, 'AUTHORIZED')} className="text-xs text-orange-400">
+                                                        <RefreshCcw className="h-3.5 w-3.5 mr-2" /> Resetar para Autorizado
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator className="bg-white/5" />
+                                                    <DropdownMenuItem onClick={() => handleDeleteCopyRequest(req.id)} className="text-xs text-red-500">
+                                                        <UserX className="h-3.5 w-3.5 mr-2" /> Remover Membro
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-2 text-[0.6rem]">
+                                        <div className="bg-black/20 p-2 rounded-xl border border-white/5">
+                                            <p className="font-bold opacity-40 uppercase tracking-tighter mb-0.5">ID Terminal</p>
+                                            <span className="text-primary font-mono text-sm font-black">{req.brokerId}</span>
+                                        </div>
+                                        <div className="bg-black/20 p-2 rounded-xl border border-white/5">
+                                            <p className="font-bold opacity-40 uppercase tracking-tighter mb-0.5">Telegram</p>
+                                            <span className="text-blue-400 font-bold">{req.telegram || '---'}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between px-1">
+                                        <span className="text-[0.5rem] font-mono opacity-20 uppercase">Registrado em: {formatDate(req.registeredAt)}</span>
+                                        <span className="text-[0.5rem] font-mono opacity-20 uppercase">UUID: {req.userId?.substring(0, 8)}...</span>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="text-center py-16 space-y-3 opacity-20">
+                                    <Users className="h-10 w-10 mx-auto" />
+                                    <p className="text-[0.6rem] font-black uppercase tracking-widest">Nenhum terminal registrado ainda.</p>
+                                </div>
+                            )}
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="operacoes" className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <div className="p-4 bg-white/5 border border-white/5 rounded-xl space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <h3 className="text-[0.65rem] font-black uppercase tracking-widest text-primary/70 flex items-center gap-1.5"><Zap className="h-3.5 w-3.5" /> {editingTradeId ? 'Editar Operação' : 'Lançar Operação'}</h3>
+                                        {editingTradeId && <Button variant="ghost" size="sm" onClick={() => setEditingTradeId(null)} className="h-6 text-[0.5rem] font-black uppercase text-red-500">Cancelar</Button>}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-[0.55rem] font-bold uppercase opacity-40">Ativo</Label>
+                                            <Select value={tradeAsset} onValueChange={setTradeAsset}>
+                                                <SelectTrigger className="h-8 bg-black/40 text-[0.6rem] border-white/5">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-black border-white/10">
+                                                    <SelectItem value="EUR/USD" className="text-xs">EUR/USD</SelectItem>
+                                                    <SelectItem value="EUR/USD (OTC)" className="text-xs">EUR/USD (OTC)</SelectItem>
+                                                    <SelectItem value="EUR/JPY" className="text-xs">EUR/JPY</SelectItem>
+                                                    <SelectItem value="EUR/JPY (OTC)" className="text-xs">EUR/JPY (OTC)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[0.55rem] font-bold uppercase opacity-40">Direção</Label>
+                                            <Select value={tradeDirection} onValueChange={(v: any) => setTradeDirection(v)}>
+                                                <SelectTrigger className="h-8 bg-black/40 text-[0.6rem] border-white/5">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-black border-white/10">
+                                                    <SelectItem value="CALL" className="text-xs">CALL (Alta)</SelectItem>
+                                                    <SelectItem value="PUT" className="text-xs">PUT (Baixa)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-[0.55rem] font-bold uppercase opacity-40">Entrada (R$)</Label>
+                                            <Input type="number" value={tradeValue} onChange={(e) => setTradeValue(Number(e.target.value))} className="h-8 bg-black/40 text-[0.65rem] border-white/5 font-mono" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[0.55rem] font-bold uppercase opacity-40">Payout %</Label>
+                                            <Input type="number" value={tradePayout} onChange={(e) => setTradePayout(Number(e.target.value))} className="h-8 bg-black/40 text-[0.65rem] border-white/5 font-mono" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                            <Label className="text-[0.55rem] font-bold uppercase opacity-40">Data</Label>
+                                            <Input type="date" value={tradeDate} onChange={(e) => setTradeDate(e.target.value)} className="h-8 bg-black/40 text-[0.6rem] border-white/5 font-mono" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <Label className="text-[0.55rem] font-bold uppercase opacity-40">Horário</Label>
+                                            <Input type="time" value={tradeTime} onChange={(e) => setTradeTime(e.target.value)} className="h-8 bg-black/40 text-[0.65rem] border-white/5 font-mono" />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                        <Button 
+                                            onClick={() => handlePostTrade('WIN')} 
+                                            className="bg-green-600 hover:bg-green-700 text-white font-black text-[0.65rem] uppercase tracking-widest h-9 rounded-lg"
+                                        >
+                                            {editingTradeId ? 'SALVAR WIN' : 'LANÇAR WIN'}
+                                        </Button>
+                                        <Button 
+                                            onClick={() => handlePostTrade('LOSS')} 
+                                            className="bg-red-600 hover:bg-red-700 text-white font-black text-[0.65rem] uppercase tracking-widest h-9 rounded-lg"
+                                        >
+                                            {editingTradeId ? 'SALVAR LOSS' : 'LANÇAR LOSS'}
+                                        </Button>
+                                        <Button 
+                                            onClick={() => handlePostTrade('DRAW')} 
+                                            className="bg-zinc-600 hover:bg-zinc-700 text-white font-black text-[0.65rem] uppercase tracking-widest h-9 rounded-lg"
+                                        >
+                                            {editingTradeId ? 'SALVAR EMPATE' : 'EMPATE'}
+                                        </Button>
+                                    </div>
+                                </div>
+                                <div className={cn(
+                                    "p-3 lg:p-3.5 rounded-xl border flex justify-between items-center",
+                                    currentProfit < 0 ? "bg-red-500/5 border-red-500/10" : (currentProfit === 0 ? "bg-white/5 border-white/10" : "bg-green-500/5 border-green-500/10")
+                                )}>
+                                    <p className={cn("text-[0.65rem] font-black uppercase tracking-[0.2em]", currentProfit < 0 ? "text-red-500/80" : (currentProfit === 0 ? "text-white/40" : "text-green-500/80"))}>Lucro Total</p>
+                                    <p className={cn("text-base lg:text-lg font-black font-mono tracking-tighter", currentProfit < 0 ? "text-red-500" : (currentProfit === 0 ? "text-zinc-600" : "text-green-500"))}>{masterStats.profitTotal}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60">Histórico de Lançamentos (Clique para Editar)</Label>
+                                <div className="max-h-[350px] overflow-y-auto no-scrollbar space-y-1 pr-1">
+                                    {copyResults.map(res => (
+                                        <div 
+                                            key={res.id} 
+                                            onClick={() => startEditingTrade(res)}
+                                            className={cn(
+                                                "flex items-center justify-between p-2 bg-black/20 rounded-lg border border-white/5 cursor-pointer hover:bg-white/5 transition-colors group",
+                                                editingTradeId === res.id && "border-primary bg-primary/5"
+                                            )}
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <Badge className={cn(
+                                                    "text-[0.5rem] py-0 px-1", 
+                                                    res.result === 'WIN' ? "bg-green-600" : (res.result === 'LOSS' ? "bg-red-600" : "bg-zinc-600")
+                                                )}>{res.result}</Badge>
+                                                <div className="flex flex-col">
+                                                    <span className="text-[0.6rem] font-bold leading-none">{res.asset}</span>
+                                                    <span className="text-[0.5rem] opacity-30 font-mono">{formatFullDate(res.date, res.time)}</span>
+                                                </div>
+                                                <span className={cn("text-[0.5rem] font-black", res.direction === 'CALL' ? "text-green-500" : "text-red-500")}>{res.direction}</span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className={cn(
+                                                    "text-[0.6rem] font-black", 
+                                                    res.netChange > 0 ? "text-green-500" : (res.netChange < 0 ? "text-red-500" : "text-white/30")
+                                                )}>
+                                                    {res.netChange > 0 ? '+' : ''}{res.netChange.toFixed(2)}
+                                                </span>
+                                                <Button size="icon" variant="ghost" className="h-5 w-5 text-red-500/50 hover:text-red-500" onClick={(e) => { e.stopPropagation(); removeTradeResult(res.id); }}>
+                                                    <X className="h-3 w-3" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="bots" className="space-y-6">
+                        <div className="bg-primary/5 p-4 rounded-2xl border border-primary/10 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className={cn("p-2 rounded-full", tgEnabled ? "bg-primary/20 text-primary" : "bg-zinc-800 text-zinc-500")}>
+                                    {tgEnabled ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+                                </div>
+                                <div>
+                                    <h3 className="text-xs font-black uppercase text-white">Bot Telegram Global</h3>
+                                    <p className="text-[0.55rem] font-bold text-muted-foreground uppercase">Habilitar todas as notificações</p>
+                                </div>
+                            </div>
+                            <Switch checked={tgEnabled} onCheckedChange={setTgEnabled} />
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-4">
+                                    <h4 className="text-[0.65rem] font-black uppercase tracking-widest text-primary/70 flex items-center gap-2"><Key className="h-3 w-3" /> Credenciais Bot</h4>
+                                    <div className="space-y-3">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Bot Token (BotFather)</Label>
+                                            <Input type="password" value={tgBotToken} onChange={(e) => setTgBotToken(e.target.value)} placeholder="123456:ABC-DEF..." className="bg-white/5 border-white/10 h-9 text-xs font-mono" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Chat ID (Grupo/Canal)</Label>
+                                            <Input value={tgChatId} onChange={(e) => setTgChatId(e.target.value)} placeholder="-100..." className="bg-white/5 border-white/10 h-9 text-xs font-mono" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-4">
+                                    <h4 className="text-[0.65rem] font-black uppercase tracking-widest text-primary/70 flex items-center gap-2"><BellRing className="h-3 w-3" /> Eventos Notificáveis</h4>
+                                    <div className="grid grid-cols-1 gap-2.5">
+                                        {[
+                                            { label: 'Notificar WIN', state: tgNotifyWin, setter: setTgNotifyWin },
+                                            { label: 'Notificar LOSS', state: tgNotifyLoss, setter: setTgNotifyLoss },
+                                            { label: 'Notificar EMPATE', state: tgNotifyDraw, setter: setTgNotifyDraw },
+                                            { label: 'Mudança de Status (ON/OFF)', state: tgNotifyStatus, setter: setTgNotifyStatus },
+                                            { label: 'Novas Solicitações (Leads)', state: tgNotifyLeads, setter: setTgNotifyLeads },
+                                        ].map((item, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-2.5 bg-white/5 rounded-xl border border-white/5">
+                                                <span className="text-[0.6rem] font-black uppercase text-zinc-400">{item.label}</span>
+                                                <Switch checked={item.state} onCheckedChange={item.setter} className="scale-75" />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div className="p-4 bg-black/40 rounded-2xl border border-white/5 space-y-4">
+                                    <h4 className="text-[0.65rem] font-black uppercase tracking-widest text-primary/70 flex items-center gap-2"><MessageSquareCode className="h-3 w-3" /> Templates de Mensagens</h4>
+                                    <div className="space-y-4 max-h-[400px] overflow-y-auto pr-1 no-scrollbar">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Operação Vencedora (WIN)</Label>
+                                            <Textarea value={tgMsgWin} onChange={(e) => setTgMsgWin(e.target.value)} className="bg-white/5 border-white/10 text-[0.65rem] h-24 font-mono leading-relaxed" />
+                                            <span className="text-[0.5rem] opacity-30 italic">Variáveis: {'{{asset}}'}, {'{{direction}}'}, {'{{profit}}'}, {'{{url}}'}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Operação Perdedora (LOSS)</Label>
+                                            <Textarea value={tgMsgLoss} onChange={(e) => setTgMsgLoss(e.target.value)} className="bg-white/5 border-white/10 text-[0.65rem] h-24 font-mono leading-relaxed" />
+                                            <span className="text-[0.5rem] opacity-30 italic">Variáveis: {'{{asset}}'}, {'{{direction}}'}, {'{{profit}}'}, {'{{url}}'}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Operação Empatada (DRAW)</Label>
+                                            <Textarea value={tgMsgDraw} onChange={(e) => setTgMsgDraw(e.target.value)} className="bg-white/5 border-white/10 text-[0.65rem] h-24 font-mono leading-relaxed" />
+                                            <span className="text-[0.5rem] opacity-30 italic">Variáveis: {'{{asset}}'}, {'{{direction}}'}, {'{{profit}}'}, {'{{url}}'}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Copy Trade Ativado (Online)</Label>
+                                            <Textarea value={tgMsgActive} onChange={(e) => setTgMsgActive(e.target.value)} className="bg-white/5 border-white/10 text-[0.65rem] h-24 font-mono leading-relaxed" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Relatório de Fechamento (Offline)</Label>
+                                            <Textarea value={tgMsgReport} onChange={(e) => setTgMsgReport(e.target.value)} className="bg-white/5 border-white/10 text-[0.65rem] h-32 font-mono leading-relaxed" />
+                                            <span className="text-[0.5rem] opacity-30 italic">Variáveis: {'{{wins}}'}, {'{{losses}}'}, {'{{profit}}'}, {'{{winrate}}'}, {'{{url}}'}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Nova Solicitação (Lead)</Label>
+                                            <Textarea value={tgMsgLead} onChange={(e) => setTgMsgLead(e.target.value)} className="bg-white/5 border-white/10 text-[0.65rem] h-24 font-mono leading-relaxed" />
+                                            <span className="text-[0.5rem] opacity-30 italic">Variáveis: {'{{id}}'}, {'{{url}}'}</span>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-[0.55rem] font-black uppercase opacity-40">Depósito/Margem Ativada</Label>
+                                            <Textarea value={tgMsgDeposit} onChange={(e) => setTgMsgDeposit(e.target.value)} className="bg-white/5 border-white/10 text-[0.65rem] h-24 font-mono leading-relaxed" />
+                                            <span className="text-[0.5rem] opacity-30 italic">Variável: {'{{url}}'}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </TabsContent>
+
+                    <TabsContent value="perfil" className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60">Nome do Trader</Label>
+                                <Input value={copyTraderName} onChange={(e) => setCopyTraderName(e.target.value)} className="bg-white/5 border-white/10 h-10 text-xs" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5"><ImageIcon className="h-3 w-3"/> Link Foto de Perfil (JPG/PNG)</Label>
+                                <Input value={copyProfilePicUrl} onChange={(e) => setCopyProfilePicUrl(e.target.value)} placeholder="https://link-da-foto.com/foto.jpg" className="bg-white/5 border-white/10 h-10 text-xs" />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5"><Instagram className="h-3 w-3"/> Instagram URL</Label>
+                                <Input value={copyInstagramUrl} onChange={(e) => setCopyInstagramUrl(e.target.value)} className="bg-white/5 border-white/10 h-10 text-xs" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5">
+                                    <svg fill="currentColor" viewBox="0 0 448 512" className="h-3 w-3">
+                                        <path d="M448 209.91a210.06 210.06 0 0 1 -122.77-39.25v178.72A162.55 162.55 0 1 1 185 188.31v89.89a74.62 74.62 0 1 0 52.23 71.18V0h88a121.18 121.18 0 0 0 1.86 22.17h0A122.18 122.18 0 0 0 381 102.39a121.43 121.43 0 0 0 67 20.14Z" />
+                                    </svg>
+                                    TikTok URL
+                                </Label>
+                                <Input value={copyTikTokUrl} onChange={(e) => setCopyTikTokUrl(e.target.value)} className="bg-white/5 border-white/10 h-10 text-xs" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5"><Send className="h-3 w-3"/> Telegram URL</Label>
+                                <Input value={copyTelegramUrl} onChange={(e) => setCopyTelegramUrl(e.target.value)} className="bg-white/5 border-white/10 h-10 text-xs" />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5"><CircleDollarSign className="h-3 w-3" /> Liquidez Requerida (R$)</Label>
+                                <Input type="number" value={copyLiquidity} onChange={(e) => setCopyLiquidity(parseInt(e.target.value))} className="bg-white/5 border-white/10 h-10 text-xs" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5"><LinkIcon className="h-3 w-3" /> Link Afiliado Exclusivo</Label>
+                                <Input value={copyAffUrl} onChange={(e) => setCopyAffUrl(e.target.value)} placeholder="Link Exnova..." className="bg-white/5 border-white/10 h-10 text-xs font-mono" />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60">Saldo Inicial</Label>
+                                <Input type="number" value={copyInitialBalance} onChange={(e) => setCopyInitialBalance(Number(e.target.value))} className="bg-white/5 border-white/10 h-10 text-xs font-mono" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label className="text-[0.6rem] font-bold uppercase opacity-60">Saldo Atual (Manual)</Label>
+                                <Input type="number" value={copyBalance} onChange={(e) => setCopyBalance(Number(e.target.value))} className="bg-white/5 border-white/10 h-10 text-xs font-mono" />
+                            </div>
+                        </div>
+                    </TabsContent>
+                </Tabs>
+            </Card>
+
+            {/* GLOBAL CONFIGS */}
+            <Card className="bg-card/40 border-white/5 p-6 rounded-2xl lg:col-span-1">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                        <Settings2 className="h-5 w-5 text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-widest">Global</h2>
+                    </div>
+                    <Button variant="destructive" size="sm" onClick={() => setIsResetDialogOpen(true)} className="h-8 px-3 rounded-lg font-bold bg-red-600/10 text-red-500 border border-red-500/20 hover:bg-red-600 hover:text-white"><History className="h-3 w-3 mr-1" /> Reset</Button>
+                </div>
+                
+                <div className="space-y-4">
+                    <div className="space-y-1.5">
+                        <Label className="text-[0.6rem] font-bold uppercase opacity-60">Link de Suporte</Label>
+                        <Input 
+                            value={supportLink} 
+                            onChange={(e) => setSupportLink(e.target.value)} 
+                            placeholder="https://t.me/..." 
+                            className="bg-white/5 border-white/10 h-10 text-xs" 
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                         <div className="space-y-1.5">
+                            <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5"><Clock className="h-3 w-3" /> Aviso Notícia (Min)</Label>
+                            <Input type="number" value={newsWarningDuration} onChange={(e) => setNewsWarningDuration(parseInt(e.target.value))} className="bg-white/5 border-white/10 h-10" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1.5"><Sparkles className="h-3 w-3" /> Janelas OTC/Hora</Label>
+                            <Input type="number" value={otcExcellentFrequency} onChange={(e) => setOtcExcellentFrequency(parseInt(e.target.value))} className="bg-white/5 border-white/10 h-10" />
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label className="text-[0.6rem] font-bold uppercase opacity-60">Chave Secret (Hotmart)</Label>
+                        <div className="flex gap-2">
+                            <Input 
+                                type={showSecret ? "text" : "password"} 
+                                value={regSecret} 
+                                onChange={(e) => setRegSecret(e.target.value)} 
+                                className="bg-white/5 border-white/10 h-10 text-xs" 
+                            />
+                            <Button size="icon" variant="outline" className="h-10 w-10" onClick={() => setShowSecret(!showSecret)}>{showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</Button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 items-end">
+                        <div className="space-y-1.5">
+                            <Label className="text-[0.6rem] font-bold uppercase opacity-60">Sinais p/ Hora (Free/VIP)</Label>
+                            <Input type="number" value={signalLimit} onChange={(e) => setSignalLimit(parseInt(e.target.value))} className="bg-white/5 border-white/10 h-10" />
+                        </div>
+                    </div>
+
+                    <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                        <div className="flex flex-col">
+                            <Label className="text-[0.6rem] font-black uppercase tracking-widest">Inverter Sinais</Label>
+                            <span className="text-[0.5rem] font-bold text-muted-foreground uppercase">Inverte Call/Put</span>
+                        </div>
+                        <Switch checked={invertSignals} onCheckedChange={setInvertSignals} />
+                    </div>
+
+                    <Button onClick={handleSaveConfigs} disabled={isConfigSaving} className="w-full h-10 bg-primary text-black font-black uppercase tracking-tighter text-xs">
+                        {isConfigSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />} Salvar Configurações
+                    </Button>
+                </div>
+            </Card>
+
+            {/* VISIBILIDADE DE PÁGINAS (KILL SWITCH) */}
+            <Card className="bg-card/40 border-white/5 p-6 rounded-2xl lg:col-span-2">
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                        <Layout className="h-5 w-5 text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-widest">Visibilidade Páginas</h2>
+                    </div>
+                    <Button size="sm" onClick={handleSavePages} disabled={isSavingPages} className="h-8 bg-primary/20 text-primary border border-primary/20 hover:bg-primary hover:text-black">
+                        {isSavingPages ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    </Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    {pagesConfig.map((p, idx) => (
+                        <div key={p.id} className="flex items-center justify-between p-2 bg-white/5 rounded-xl border border-white/5 group hover:border-primary/20 transition-all">
+                            <div className="flex items-center gap-2">
+                                <div className="flex flex-col gap-0.5">
+                                    <Button variant="ghost" size="icon" className="h-4 w-4 p-0 opacity-40 hover:opacity-100" onClick={() => movePage(idx, 'up')} disabled={idx === 0}>
+                                        <ArrowUp className="h-3 w-3" />
+                                    </Button>
+                                    <Button variant="ghost" size="icon" className="h-4 w-4 p-0 opacity-40 hover:opacity-100" onClick={() => movePage(idx, 'down')} disabled={idx === pagesConfig.length - 1}>
+                                        <ArrowDown className="h-3 w-3" />
+                                    </Button>
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="text-[0.65rem] font-black uppercase leading-tight">{p.label}</span>
+                                    <span className="text-[0.5rem] font-mono opacity-40">{p.path}</span>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <Button asChild variant="ghost" size="icon" className="h-8 w-8 rounded-lg bg-white/5 hover:bg-white/10">
+                                    <a href={p.path} target="_blank" rel="noopener noreferrer">
+                                        <ExternalLink className="h-3.5 w-3.5 opacity-60" />
+                                    </a>
+                                </Button>
+                                <Switch 
+                                    checked={p.enabled} 
+                                    onCheckedChange={() => handleTogglePage(p.id)} 
+                                    className="scale-75"
+                                />
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </Card>
+
+            {/* CONFIGURAÇÃO PÁGINA VIP (VENDAS) */}
+            <Card className="bg-card/40 border-white/5 p-6 rounded-2xl lg:col-span-1">
+                <div className="flex items-center gap-2 mb-6">
+                    <Crown className="h-5 w-5 text-primary" />
+                    <h2 className="text-sm font-black uppercase tracking-widest">Página VIP (Vendas)</h2>
+                </div>
+                
+                <div className="space-y-4">
+                    <div className="space-y-1.5">
+                        <Label className="text-[0.6rem] font-bold uppercase opacity-60">ID do Vídeo VSL (YouTube)</Label>
+                        <Input 
+                            value={vipVslId} 
+                            onChange={(e) => setVipVslId(e.target.value)} 
+                            placeholder="Ex: 8RebjHIi7Ok" 
+                            className="bg-white/5 border-white/10 h-10 text-xs" 
+                        />
+                    </div>
+
+                    <div className="space-y-1.5">
+                        <Label className="text-[0.6rem] font-bold uppercase opacity-60">Preço Vitalício</Label>
+                        <Input 
+                            value={vipPrice} 
+                            onChange={(e) => setVipPrice(e.target.value)} 
+                            placeholder="Ex: R$ 197" 
+                            className="bg-white/5 border-white/10 h-10 text-xs" 
+                        />
+                    </div>
+                    
+                    <p className="text-[0.5rem] text-muted-foreground uppercase font-medium leading-tight">
+                        * O ID do vídeo é o código após "v=" na URL do YouTube. O preço será atualizado em todas as versões da página VIP.
+                    </p>
+                </div>
+            </Card>
+        </div>
+
+        {/* FILTERS AND TABLE */}
+        <div className="flex flex-col xl:flex-row gap-6 items-start xl:items-end justify-between">
+            <div className="flex flex-wrap gap-2">
+                {['ALL', 'PENDING', 'DEPOSIT', 'PREMIUM', 'REJECTED', 'SUSPENDED'].map((f) => (
+                    <Button 
+                        key={f} 
+                        variant={activeFilter === f ? 'default' : 'outline'} 
+                        onClick={() => setActiveFilter(f as QuickFilter)} 
+                        className={cn(
+                            "h-10 px-4 rounded-xl relative",
+                            activeFilter === f ? 'bg-primary text-black' : 'bg-white/5',
+                            f === 'PENDING' && stats.pending > 0 && "border-orange-500 text-orange-500",
+                            f === 'DEPOSIT' && stats.deposit > 0 && "border-emerald-500 text-emerald-500"
+                        )}
+                    >
+                        {f === 'DEPOSIT' ? 'DEPÓSITOS' : f}
+                        {f === 'PENDING' && stats.pending > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
+                            </span>
+                        )}
+                        {f === 'DEPOSIT' && stats.deposit > 0 && (
+                            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                            </span>
+                        )}
+                    </Button>
+                ))}
+            </div>
+            <div className="flex gap-3 w-full xl:w-auto">
+                <div className="relative flex-grow sm:w-80">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="E-mail ou ID..." className="pl-10 rounded-xl bg-white/5 h-11" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+            </div>
+        </div>
+
+        <Card className="bg-card/40 border-white/5 overflow-hidden rounded-2xl">
+          <Table>
+            <TableHeader className="bg-white/5">
+              <TableRow className="border-white/5">
+                <TableHead onClick={() => setSortConfig({ key: 'createdAt', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })} className="cursor-pointer text-[0.6rem] font-black uppercase">Registo <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
+                <TableHead onClick={() => setSortConfig({ key: 'email', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })} className="cursor-pointer text-[0.6rem] font-black uppercase">Membro <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
+                <TableHead onClick={() => setSortConfig({ key: 'lastActivity', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })} className="cursor-pointer text-[0.6rem] font-black uppercase">Atividade <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
+                <TableHead onClick={() => setSortConfig({ key: 'idCorretora', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })} className="cursor-pointer text-[0.6rem] font-black uppercase">ID Corretora <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
+                <TableHead className="text-[0.6rem] font-black uppercase">Avaliação</TableHead>
+                <TableHead onClick={() => setSortConfig({ key: 'status', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })} className="cursor-pointer text-[0.6rem] font-black uppercase">Status <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
+                <TableHead onClick={() => setSortConfig({ key: 'plano', direction: sortConfig.direction === 'asc' ? 'desc' : 'asc' })} className="cursor-pointer text-[0.6rem] font-black uppercase">Plano <ArrowUpDown className="inline h-3 w-3 ml-1" /></TableHead>
+                <TableHead className="text-right text-[0.6rem] font-black uppercase">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {mergedUsers.map((u) => (
+                <TableRow key={u.id} className="border-white/5 hover:bg-white/5">
+                  <TableCell className="text-[0.7rem] font-mono opacity-50">{formatDate(u.createdAt)}</TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold">{u.email}</span>
+                        {u.isNew && (
+                           <Badge className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20 text-[0.5rem] px-1.5 h-4 flex items-center gap-1 animate-pulse">
+                              <Star className="h-2 w-2 fill-yellow-500" /> NOVO - {u.daysSince}D
+                           </Badge>
+                        )}
+                      </div>
+                      {u.isGhost && <Badge variant="outline" className="text-[0.5rem] py-0 border-primary/20 text-primary/50 w-fit">SEM PERFIL</Badge>}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-[0.7rem] font-mono opacity-80">{formatDate(u.lastActivity)}</TableCell>
+                  <TableCell 
+                    className="text-xs font-mono text-primary font-bold cursor-pointer hover:underline hover:text-primary/80 transition-colors"
+                    onClick={() => {
+                      setSelectedUserDetail(u);
+                      setUserBalanceInput(u.balance?.toString() || '0');
+                    }}
+                  >
+                    {u.brokerId}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((star) => (
+                            <Star 
+                                key={star} 
+                                className={cn(
+                                    "h-3 w-3", 
+                                    star <= (u.rating || 0) ? "text-yellow-500 fill-yellow-500" : "text-zinc-700"
+                                )} 
+                            />
+                        ))}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={u.accountStatus === 'DISABLED' ? 'destructive' : 'outline'} className="text-[0.6rem] font-black">{u.accountStatus === 'DISABLED' ? 'SUSPENSO' : 'ATIVA'}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={cn("text-[0.6rem] font-black px-2 py-0.5 border-none shadow-md whitespace-nowrap", getPlanBadgeStyles(u.rawStatus))}>
+                        {getStatusLabel(u.rawStatus)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 rounded-full"><MoreVertical className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-black/95 border-white/10 w-64 p-2">
+                        
+                        <DropdownMenuItem onClick={() => handleUpdateVipStatus(u.id, u.email, 'PREMIUM')} className="text-xs font-bold text-purple-400 focus:bg-purple-400/10 mb-1">
+                          <UserCheck className="h-4 w-4 mr-3" /> Aprovar para PREMIUM
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem onClick={() => handleUpdateVipStatus(u.id, u.email, 'DEPOSIT_PENDING')} className="text-xs font-bold text-emerald-400 focus:bg-emerald-400/10 mb-1">
+                          <RefreshCcw className="h-4 w-4 mr-3" /> Mudar: Depósito Pendente
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem onClick={() => handleUpdateVipStatus(u.id, u.email, 'AWAITING_DEPOSIT')} className="text-xs font-bold text-cyan-400 focus:bg-cyan-400/10 mb-1">
+                          <Timer className="h-4 w-4 mr-3" /> Mudar: Aguard. Depósito
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem onClick={() => handleUpdateVipStatus(u.id, u.email, 'PENDING')} className="text-xs font-bold text-orange-400 focus:bg-orange-400/10 mb-1">
+                          <RefreshCcw className="h-4 w-4 mr-3" /> Mudar: Pendente
+                        </DropdownMenuItem>
+
+                        <DropdownMenuItem onClick={() => handleUpdateVipStatus(u.id, u.email, 'VIP_RESET')} className="text-xs font-bold text-yellow-400 focus:bg-yellow-400/10 mb-1">
+                          <Zap className="h-4 w-4 mr-3" /> Tornar VIP (Reset)
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuSeparator className="bg-white/5" />
+
+                        <DropdownMenuSub>
+                           <DropdownMenuSubTrigger className="text-xs font-bold text-yellow-500">
+                             <Star className="h-4 w-4 mr-3" /> Definir Avaliação
+                           </DropdownMenuSubTrigger>
+                           <DropdownMenuSubContent className="bg-black/95 border-white/10 p-2">
+                              {[0, 1, 2, 3, 4, 5].map((r) => (
+                                <DropdownMenuItem key={r} onClick={() => handleUpdateRating(u.id, r)} className="text-xs font-bold">
+                                   {r} Estrelas
+                                </DropdownMenuItem>
+                              ))}
+                           </DropdownMenuSubContent>
+                        </DropdownMenuSub>
+
+                        <DropdownMenuSeparator className="bg-white/5" />
+
+                        <DropdownMenuItem onClick={() => handleUpdateVipStatus(u.id, u.email, 'REJECTED')} className="text-xs font-bold text-red-400 focus:bg-red-400/10 mb-1">
+                          <Ban className="h-4 w-4 mr-3" /> Recusar / Rebaixar
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuSeparator className="bg-white/5" />
+                        
+                        <DropdownMenuItem onClick={() => handleToggleAccount(u.id, u.accountStatus, u.email)} className="text-xs opacity-60 hover:opacity-100">
+                          {u.accountStatus === 'DISABLED' ? <ShieldCheck className="h-3.5 w-3.5 mr-2" /> : <ShieldOff className="h-3.5 w-3.5 mr-2" />}
+                          {u.accountStatus === 'DISABLED' ? 'Ativar Conta' : 'Suspender Conta'}
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuSeparator className="bg-white/5" />
+                        
+                        <DropdownMenuItem className="text-destructive text-xs font-bold opacity-60 hover:opacity-100" onClick={() => setDeleteUserId(u.id)}>
+                          <Trash2 className="h-3.5 w-3.5 mr-2" /> Excluir Total
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      </main>
+
+      <AlertDialog open={isResetDialogOpen} onOpenChange={setIsResetDialogOpen}>
+        <AlertDialogContent className="bg-[#0d0d0d] border-white/10">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-red-500 font-black uppercase">Zerar Estatísticas?</AlertDialogTitle>
+            <AlertDialogDescription className="text-sm">Esta ação limpará todos os contadores de Cliques acumulados até ao momento.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-white/5 border-white/10">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetStats} className="bg-red-600 text-white hover:bg-red-700">Confirmar Reset</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={isClicksDialogOpen} onOpenChange={setIsClicksDialogOpen}>
+        <DialogContent className="bg-[#0d0d0d] border-white/10 max-w-md">
+            <DialogHeader>
+                <DialogTitle className="text-primary font-black uppercase flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" /> Detalhes de Cliques
+                </DialogTitle>
+                <DialogDescription className="text-xs">
+                    Cliques totais por página (Excluindo Admin)
+                </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3 pt-4">
+                {pageClicks.length > 0 ? pageClicks.map((stat, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                        <span className="text-xs font-bold uppercase opacity-70">{stat.page}</span>
+                        <span className="font-mono font-black text-primary">{stat.count}</span>
+                    </div>
+                )) : (
+                    <p className="text-center py-8 text-muted-foreground text-sm">Sem dados de cliques registados.</p>
+                )}
+            </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleteUserId} onOpenChange={(open) => !open && setDeleteUserId(null)}>
+        <AlertDialogContent className="bg-[#0d0d0d] border-white/10">
+          <AlertDialogHeader>
+            <DialogTitle className="text-red-500 font-black uppercase">Excluir Utilizador?</DialogTitle>
+            <AlertDialogDescription className="text-sm">Esta ação é irreversível e apagará todos os dados de perfil e pedidos VIP deste membro.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-white/5 border-white/10">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} disabled={isDeleting} className="bg-red-600 text-white hover:bg-red-700">
+               {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Confirmar Exclusão'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!selectedUserDetail} onOpenChange={(open) => !open && setSelectedUserDetail(null)}>
+        <DialogContent className="bg-[#0d0d0d] border-white/10 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-primary font-black uppercase flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-primary" /> Detalhes da Conta & Saldo
+            </DialogTitle>
+            <DialogDescription className="text-xs text-zinc-400">
+              Visualize e atualize o saldo real do usuário no banco de dados.
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedUserDetail && (
+            <div className="space-y-4 pt-4">
+              <div className="space-y-2 text-left">
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-zinc-500 block uppercase font-bold text-[0.6rem]">ID Corretora</span>
+                    <span className="font-mono font-bold text-white text-sm bg-white/5 px-2 py-1 rounded block mt-1">{selectedUserDetail.brokerId}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500 block uppercase font-bold text-[0.6rem]">Status Plano</span>
+                    <span className="font-bold text-white text-sm bg-white/5 px-2 py-1 rounded block mt-1 uppercase">{selectedUserDetail.subscriptionStatus}</span>
+                  </div>
+                </div>
+
+                <div className="text-xs mt-2">
+                  <span className="text-zinc-500 block uppercase font-bold text-[0.6rem]">E-mail do Membro</span>
+                  <span className="font-semibold text-zinc-300 block bg-white/5 px-2 py-1 rounded mt-1 truncate">{selectedUserDetail.email}</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[0.65rem] text-zinc-500 mt-2">
+                  <div>
+                    <span className="block font-bold">Cadastro:</span>
+                    <span>{formatDate(selectedUserDetail.createdAt)}</span>
+                  </div>
+                  <div>
+                    <span className="block font-bold">Última Atividade:</span>
+                    <span>{formatDate(selectedUserDetail.lastActivity)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5 border-t border-white/10 pt-4">
+                <Label className="text-[0.65rem] font-bold uppercase text-primary tracking-wider">Saldo da Conta (R$)</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    type="number" 
+                    step="0.01"
+                    value={userBalanceInput} 
+                    onChange={(e) => setUserBalanceInput(e.target.value)} 
+                    placeholder="0.00" 
+                    className="bg-white/5 border-white/10 h-10 font-mono text-white text-sm" 
+                  />
+                  <Button 
+                    onClick={handleSaveUserBalance} 
+                    disabled={isUpdatingBalance} 
+                    className="bg-primary text-black font-bold px-4 h-10 shrink-0 hover:bg-primary/90"
+                  >
+                    {isUpdatingBalance ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-1.5" />}
+                    SALVAR
+                  </Button>
+                </div>
+                <p className="text-[0.55rem] text-zinc-500 uppercase">
+                  * Este saldo será armazenado de forma persistente no Firestore e vinculado ao ID do usuário.
+                </p>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
