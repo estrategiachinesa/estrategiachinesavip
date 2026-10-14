@@ -80,6 +80,8 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = React.memo(({ asset,
       theme: 'dark',
       style: '1',
       locale: 'br',
+      backgroundColor: '#020202',
+      gridColor: 'rgba(255, 255, 255, 0.04)',
       enable_publishing: false,
       hide_side_toolbar: true,
       hide_top_toolbar: true,
@@ -104,7 +106,10 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = React.memo(({ asset,
       },
       overrides: {
         'mainSeriesProperties.showOHLC': false,
-        'paneProperties.background': '#020202'
+        'paneProperties.backgroundType': 'solid',
+        'paneProperties.background': '#020202',
+        'paneProperties.vertGridProperties.color': 'rgba(255, 255, 255, 0.04)',
+        'paneProperties.horzGridProperties.color': 'rgba(255, 255, 255, 0.04)'
       },
       support_host: 'https://www.tradingview.com'
     });
