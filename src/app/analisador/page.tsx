@@ -603,7 +603,7 @@ export default function AnalisadorPage() {
                                 </div>
                                 <span className="text-[0.45rem] font-black text-primary bg-primary/10 px-1 rounded uppercase">{currentExpirationTime}</span>
                             </div>
-                            <div className="flex-grow h-full pt-[25px] relative">
+                            <div className="flex-grow h-full pt-[25px] relative bg-black">
                                 <TradingViewWidget asset={currentAsset} interval={currentExpirationTime.replace('m', '')} />
                                 {appState === 'loading' && <BeamField />}
                             </div>

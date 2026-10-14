@@ -78,9 +78,10 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = React.memo(({ asset,
       interval: validInterval,
       timezone: 'America/Sao_Paulo',
       theme: 'dark',
+      colorTheme: 'dark',
       style: '1',
       locale: 'br',
-      backgroundColor: '#020202',
+      backgroundColor: '#000000',
       gridColor: 'rgba(255, 255, 255, 0.04)',
       enable_publishing: false,
       hide_side_toolbar: true,
@@ -95,21 +96,44 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = React.memo(({ asset,
       studies: [
         'STD;Bollinger_Bands'
       ],
-      studies_overrides: {
+      studies_overrides: JSON.stringify({
+        'bollinger bands.median.visible': false,
+        'bollinger bands.basis.visible': false,
+        'Bollinger Bands.Basis.visible': false,
+        'Bollinger Bands.median.visible': false,
         'Bollinger Bands.Basis.color': 'rgba(0, 0, 0, 0)',
         'Bollinger Bands.Basis.transparency': 100,
-        'Bollinger Bands.Plot.color': 'rgba(0, 0, 0, 0)',
-        'Bollinger Bands.Plot.transparency': 100,
+        'Bollinger Bands.median.color': 'rgba(0, 0, 0, 0)',
+        'Bollinger Bands.median.transparency': 100,
+        'bollinger bands.basis.color': 'rgba(0, 0, 0, 0)',
+        'bollinger bands.basis.transparency': 100,
+        'bollinger bands.median.color': 'rgba(0, 0, 0, 0)',
+        'bollinger bands.median.transparency': 100,
         'Bollinger Bands.Upper.color': '#FF0000',
+        'Bollinger Bands.Upper.linewidth': 2,
+        'Bollinger Bands.Upper.transparency': 0,
+        'Bollinger Bands.Upper.visible': true,
         'Bollinger Bands.Lower.color': '#22C55E',
-        'Bollinger Bands.Background.transparency': 95
-      },
+        'Bollinger Bands.Lower.linewidth': 2,
+        'Bollinger Bands.Lower.transparency': 0,
+        'Bollinger Bands.Lower.visible': true,
+        'Bollinger Bands.Background.color': 'rgba(34, 197, 94, 0.05)',
+        'Bollinger Bands.Background.transparency': 95,
+        'bollinger bands.upper.color': '#FF0000',
+        'bollinger bands.upper.linewidth': 2,
+        'bollinger bands.lower.color': '#22C55E',
+        'bollinger bands.lower.linewidth': 2
+      }),
       overrides: {
         'mainSeriesProperties.showOHLC': false,
         'paneProperties.backgroundType': 'solid',
-        'paneProperties.background': '#020202',
+        'paneProperties.background': '#000000',
+        'paneProperties.backgroundGradientStartColor': '#000000',
+        'paneProperties.backgroundGradientEndColor': '#000000',
         'paneProperties.vertGridProperties.color': 'rgba(255, 255, 255, 0.04)',
-        'paneProperties.horzGridProperties.color': 'rgba(255, 255, 255, 0.04)'
+        'paneProperties.horzGridProperties.color': 'rgba(255, 255, 255, 0.04)',
+        'scalesProperties.backgroundColor': '#000000',
+        'scalesProperties.textColor': '#888888'
       },
       support_host: 'https://www.tradingview.com'
     });
@@ -126,9 +150,9 @@ const TradingViewWidget: React.FC<TradingViewWidgetProps> = React.memo(({ asset,
 
   return (
     <div 
-      className="tradingview-widget-container w-full h-full min-h-[300px] relative bg-black"
+      className="tradingview-widget-container w-full h-full min-h-[300px] relative bg-black [color-scheme:dark]"
       ref={containerRef}
-      style={{ width: '100%', height: '100%', minHeight: '300px' }}
+      style={{ width: '100%', height: '100%', minHeight: '300px', backgroundColor: '#000000', colorScheme: 'dark' }}
     />
   );
 });
