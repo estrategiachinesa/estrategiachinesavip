@@ -370,14 +370,7 @@ export default function VipPage() {
                 ? "bg-gradient-to-b from-black via-zinc-900 to-black border-amber-500/40 shadow-xl" 
                 : "bg-card/50 border-border"
             )}>
-              {/* Corner Ribbon for Black Friday */}
-              {isBlackFriday && (
-                <div className="absolute -top-3 -right-3">
-                  <div className="bg-gradient-to-r from-red-600 to-amber-600 text-white text-[0.65rem] font-black uppercase px-6 py-1 rotate-12 shadow-lg tracking-wider">
-                    70% OFF
-                  </div>
-                </div>
-              )}
+
 
               <p className={cn(
                 "text-xs font-black uppercase tracking-widest",
