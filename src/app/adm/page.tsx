@@ -245,6 +245,10 @@ export default function AdminDashboard() {
   // VIP Page Configs
   const [vipVslId, setVipVslId] = useState('8RebjHIi7Ok');
   const [vipPrice, setVipPrice] = useState('R$ 197');
+  const [vipBlackFridayTheme, setVipBlackFridayTheme] = useState(true);
+  const [vipCheckoutUrl, setVipCheckoutUrl] = useState('https://pay.hotmart.com/T101931662P?checkoutMode=2');
+  const [vipBlackFridayUrl, setVipBlackFridayUrl] = useState('https://pay.hotmart.com/E101943327K?checkoutMode=2&off=cy5v5mrr');
+  const [isSavingVipOffer, setIsSavingVipOffer] = useState(false);
   
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -454,11 +458,28 @@ export default function AdminDashboard() {
             setOtcExcellentFrequency(remoteSnap.data().otcExcellentFrequency || 4);
         }
         if (limitSnap.exists()) setSignalLimit(limitSnap.data().hourlySignalLimit || 3);
-        if (linksSnap.exists()) setSupportLink(linksSnap.data().supportUrl || '');
+        if (linksSnap.exists()) {
+            const data = linksSnap.data();
+            setSupportLink(data.supportUrl || '');
+            if (data.vipCheckoutUrl || data.vipUrl || data.hotmartUrl) {
+                setVipCheckoutUrl(data.vipCheckoutUrl || data.vipUrl || data.hotmartUrl);
+            }
+            if (data.blackFridayUrl) {
+                setVipBlackFridayUrl(data.blackFridayUrl);
+            }
+        }
         
         if (offerSnap.exists()) {
-            setVipPrice(offerSnap.data().price || 'R$ 197');
-            setVipVslId(offerSnap.data().vipVslId || '8RebjHIi7Ok');
+            const data = offerSnap.data();
+            setVipPrice(data.price || 'R$ 197');
+            setVipVslId(data.vipVslId || '8RebjHIi7Ok');
+            setVipBlackFridayTheme(data.blackFridayTheme ?? true);
+            if (data.vipCheckoutUrl || data.vipUrl || data.hotmartUrl) {
+                setVipCheckoutUrl(data.vipCheckoutUrl || data.vipUrl || data.hotmartUrl);
+            }
+            if (data.blackFridayUrl) {
+                setVipBlackFridayUrl(data.blackFridayUrl);
+            }
         }
 
         if (copySnap.exists()) {
@@ -552,12 +573,77 @@ export default function AdminDashboard() {
             otcExcellentFrequency: otcExcellentFrequency
         }, { merge: true }),
         setDoc(doc(firestore, 'appConfig', 'limitation'), { hourlySignalLimit: signalLimit }, { merge: true }),
-        setDoc(doc(firestore, 'appConfig', 'links'), { supportUrl: supportLink.trim() }, { merge: true }),
-        setDoc(doc(firestore, 'appConfig', 'offer'), { price: vipPrice.trim(), vipVslId: vipVslId.trim() }, { merge: true })
+        setDoc(doc(firestore, 'appConfig', 'links'), { 
+          supportUrl: supportLink.trim(),
+          vipCheckoutUrl: vipCheckoutUrl.trim(),
+          vipUrl: vipCheckoutUrl.trim(),
+          hotmartUrl: vipCheckoutUrl.trim(),
+          blackFridayUrl: vipBlackFridayUrl.trim()
+        }, { merge: true }),
+        setDoc(doc(firestore, 'appConfig', 'offer'), { 
+          price: vipPrice.trim(), 
+          vipVslId: vipVslId.trim(),
+          blackFridayTheme: vipBlackFridayTheme,
+          vipCheckoutUrl: vipCheckoutUrl.trim(),
+          vipUrl: vipCheckoutUrl.trim(),
+          hotmartUrl: vipCheckoutUrl.trim(),
+          blackFridayUrl: vipBlackFridayUrl.trim()
+        }, { merge: true })
       ]);
       toast({ title: 'Configurações Salvas' });
     } catch (e) { toast({ variant: 'destructive', title: 'Erro ao Salvar' }); }
     finally { setIsConfigSaving(false); }
+  };
+
+  const handleSaveVipOffer = async () => {
+    if (!firestore) return;
+    setIsSavingVipOffer(true);
+    try {
+      const trimmedVipUrl = vipCheckoutUrl.trim();
+      const trimmedBfUrl = vipBlackFridayUrl.trim();
+      const trimmedPrice = vipPrice.trim();
+      const trimmedVsl = vipVslId.trim();
+
+      await Promise.all([
+        setDoc(doc(firestore, 'appConfig', 'offer'), { 
+          price: trimmedPrice, 
+          vipVslId: trimmedVsl,
+          blackFridayTheme: vipBlackFridayTheme,
+          vipCheckoutUrl: trimmedVipUrl,
+          vipUrl: trimmedVipUrl,
+          hotmartUrl: trimmedVipUrl,
+          blackFridayUrl: trimmedBfUrl
+        }, { merge: true }),
+        setDoc(doc(firestore, 'appConfig', 'links'), {
+          vipCheckoutUrl: trimmedVipUrl,
+          vipUrl: trimmedVipUrl,
+          hotmartUrl: trimmedVipUrl,
+          blackFridayUrl: trimmedBfUrl
+        }, { merge: true })
+      ]);
+      toast({ 
+        title: 'Configurações VIP Salvas', 
+        description: 'Os links de checkout, preço e vídeo foram atualizados com sucesso.' 
+      });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Erro ao salvar configurações VIP' });
+    } finally {
+      setIsSavingVipOffer(false);
+    }
+  };
+
+  const handleToggleVipBlackFriday = async (checked: boolean) => {
+    setVipBlackFridayTheme(checked);
+    if (!firestore) return;
+    try {
+      await setDoc(doc(firestore, 'appConfig', 'offer'), { blackFridayTheme: checked }, { merge: true });
+      toast({ 
+        title: checked ? 'Tema Black Friday Ativado 🔥' : 'Tema Normal Ativado 🛡️',
+        description: checked ? 'A página /vip agora exibe a estética de Black Friday com ofertas e contagem regressiva.' : 'A página /vip voltou ao tema clássico.'
+      });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Erro ao salvar tema VIP' });
+    }
   };
 
   const winRate = useMemo(() => {
@@ -1875,12 +1961,87 @@ export default function AdminDashboard() {
 
             {/* CONFIGURAÇÃO PÁGINA VIP (VENDAS) */}
             <Card className="bg-card/40 border-white/5 p-6 rounded-2xl lg:col-span-1">
-                <div className="flex items-center gap-2 mb-6">
-                    <Crown className="h-5 w-5 text-primary" />
-                    <h2 className="text-sm font-black uppercase tracking-widest">Página VIP (Vendas)</h2>
+                <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-2">
+                        <Crown className="h-5 w-5 text-primary" />
+                        <h2 className="text-sm font-black uppercase tracking-widest">Página VIP (Vendas)</h2>
+                    </div>
+                    <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-[0.65rem] font-bold bg-white/5 hover:bg-white/10 text-muted-foreground hover:text-white">
+                        <a href="/vip" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">
+                            <span>Ver /vip</span>
+                            <ExternalLink className="h-3 w-3" />
+                        </a>
+                    </Button>
                 </div>
                 
                 <div className="space-y-4">
+                    {/* TEMA BLACK FRIDAY TOGGLE */}
+                    <div className={cn(
+                        "p-3.5 rounded-xl border transition-all",
+                        vipBlackFridayTheme 
+                            ? "bg-gradient-to-r from-amber-500/10 via-red-500/10 to-black/40 border-amber-500/40 shadow-sm" 
+                            : "bg-white/5 border-white/10"
+                    )}>
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs font-black uppercase tracking-tight text-white flex items-center gap-1">
+                                        {vipBlackFridayTheme ? '🔥 Tema Black Friday' : '🛡️ Tema Padrão'}
+                                    </span>
+                                    <span className={cn(
+                                        "text-[0.55rem] font-black uppercase px-2 py-0.5 rounded-full border",
+                                        vipBlackFridayTheme 
+                                            ? "bg-amber-500/20 text-amber-300 border-amber-500/40" 
+                                            : "bg-white/10 text-muted-foreground border-white/10"
+                                    )}>
+                                        {vipBlackFridayTheme ? 'Ativado' : 'Desativado'}
+                                    </span>
+                                </div>
+                                <p className="text-[0.6rem] text-muted-foreground leading-tight">
+                                    {vipBlackFridayTheme 
+                                        ? 'Página /vip com banner de urgência, contagem regressiva, selos Black Friday e checkout promocional.'
+                                        : 'Página /vip exibindo o visual clássico sem elementos de Black Friday.'}
+                                </p>
+                            </div>
+                            <Switch 
+                                checked={vipBlackFridayTheme} 
+                                onCheckedChange={handleToggleVipBlackFriday} 
+                                className="scale-95 data-[state=checked]:bg-amber-500"
+                            />
+                        </div>
+                    </div>
+
+                    {/* LINK DE CHECKOUT (NORMAL / PADRÃO) */}
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-[0.6rem] font-bold uppercase opacity-60">Link de Checkout (Padrão)</Label>
+                            <span className="text-[0.55rem] font-mono text-muted-foreground">Hotmart VIP</span>
+                        </div>
+                        <Input 
+                            value={vipCheckoutUrl} 
+                            onChange={(e) => setVipCheckoutUrl(e.target.value)} 
+                            placeholder="https://pay.hotmart.com/..." 
+                            className="bg-white/5 border-white/10 h-10 text-xs font-mono" 
+                        />
+                    </div>
+
+                    {/* LINK DE CHECKOUT (BLACK FRIDAY) */}
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <Label className="text-[0.6rem] font-bold uppercase opacity-60 flex items-center gap-1">
+                                <span>Link de Checkout (Black Friday)</span>
+                                <span className="text-amber-400">🔥</span>
+                            </Label>
+                            <span className="text-[0.55rem] font-mono text-amber-400/80">Hotmart BF</span>
+                        </div>
+                        <Input 
+                            value={vipBlackFridayUrl} 
+                            onChange={(e) => setVipBlackFridayUrl(e.target.value)} 
+                            placeholder="https://pay.hotmart.com/...&off=..." 
+                            className="bg-white/5 border-white/10 h-10 text-xs font-mono text-amber-300" 
+                        />
+                    </div>
+
                     <div className="space-y-1.5">
                         <Label className="text-[0.6rem] font-bold uppercase opacity-60">ID do Vídeo VSL (YouTube)</Label>
                         <Input 
@@ -1900,9 +2061,18 @@ export default function AdminDashboard() {
                             className="bg-white/5 border-white/10 h-10 text-xs" 
                         />
                     </div>
+
+                    <Button 
+                        onClick={handleSaveVipOffer} 
+                        disabled={isSavingVipOffer} 
+                        className="w-full h-9 bg-primary/20 hover:bg-primary text-primary hover:text-black font-black uppercase text-xs tracking-tight transition-all"
+                    >
+                        {isSavingVipOffer ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Save className="h-3.5 w-3.5 mr-1.5" />}
+                        Salvar Configurações VIP
+                    </Button>
                     
                     <p className="text-[0.5rem] text-muted-foreground uppercase font-medium leading-tight">
-                        * O ID do vídeo é o código após "v=" na URL do YouTube. O preço será atualizado em todas as versões da página VIP.
+                        * O link de checkout é atualizado instantaneamente para novos acessos na página /vip mantendo os cookies de afiliados.
                     </p>
                 </div>
             </Card>

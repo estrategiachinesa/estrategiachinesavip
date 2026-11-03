@@ -7,9 +7,10 @@ import Image from 'next/image';
 type HotmartButtonProps = {
   className?: string;
   url: string;
+  children?: React.ReactNode;
 };
 
-export const HotmartButton = ({ className, url }: HotmartButtonProps) => {
+export const HotmartButton = ({ className, url, children }: HotmartButtonProps) => {
   const { affiliateId, trackCheckoutClick } = useAppConfig();
   let finalUrl = url;
 
@@ -28,14 +29,16 @@ export const HotmartButton = ({ className, url }: HotmartButtonProps) => {
       onClick={handleClick}
       className={cn('block w-fit mx-auto transition-transform hover:scale-105 active:scale-95', className)}
     >
-      <Image
-        src="https://static.hotmart.com/img/btn-buy-green.png"
-        alt="Comprar agora"
-        width={300}
-        height={56}
-        priority
-        unoptimized
-      />
+      {children || (
+        <Image
+          src="https://static.hotmart.com/img/btn-buy-green.png"
+          alt="Comprar agora"
+          width={300}
+          height={56}
+          priority
+          unoptimized
+        />
+      )}
     </a>
   );
 };

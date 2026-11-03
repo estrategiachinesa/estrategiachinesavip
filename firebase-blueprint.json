@@ -127,7 +127,10 @@
         "supportUrl": { "type": "string" },
         "hourlySignalLimit": { "type": "number" },
         "newsWarningDuration": { "type": "number" },
-        "otcExcellentFrequency": { "type": "number" }
+        "otcExcellentFrequency": { "type": "number" },
+        "blackFridayTheme": { "type": "boolean", "description": "Toggle Black Friday promotional theme on /vip" },
+        "vipCheckoutUrl": { "type": "string", "description": "Standard VIP checkout link" },
+        "blackFridayUrl": { "type": "string", "description": "Promotional Black Friday checkout link" }
       }
     }
   },

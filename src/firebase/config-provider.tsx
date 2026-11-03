@@ -19,6 +19,8 @@ export interface AppConfig {
   telegramUrl: string;
   blackFridayUrl: string;
   vipUrl?: string;
+  vipCheckoutUrl?: string;
+  blackFridayTheme?: boolean;
   hourlySignalLimit: number;
   correlationChance: number;
   invertSignal: boolean;
@@ -83,6 +85,8 @@ const defaultConfig: AppConfig = {
     telegramUrl: "https://t.me/Trader_Chines",
     blackFridayUrl: "https://pay.hotmart.com/E101943327K?checkoutMode=2&off=cy5v5mrr",
     vipUrl: "https://pay.hotmart.com/T101931662P?checkoutMode=2",
+    vipCheckoutUrl: "https://pay.hotmart.com/T101931662P?checkoutMode=2",
+    blackFridayTheme: true,
     hourlySignalLimit: 3,
     correlationChance: 0.7,
     invertSignal: false,
