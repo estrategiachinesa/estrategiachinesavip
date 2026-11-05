@@ -259,7 +259,7 @@ export default function VipPage() {
 
           <p className="text-base md:text-lg text-foreground/80 max-w-2xl mx-auto leading-relaxed">
             {isBlackFriday 
-              ? "A maior oportunidade do ano para desbloquear seu Acesso Vitalício com mais de 70% de desconto. Ferramenta completa, sinais sem Martingale e sem nenhuma mensalidade."
+              ? "A maior oportunidade do ano para desbloquear seu Acesso Vitalício com mais de 50% de desconto. Ferramenta completa, sinais sem Martingale e sem nenhuma mensalidade."
               : "Você está a um passo de desbloquear o acesso ilimitado à ferramenta que está revolucionando o mercado de opções binárias."}
           </p>
         </div>
@@ -399,7 +399,7 @@ export default function VipPage() {
                       ? "text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-300 to-yellow-200" 
                       : "text-foreground"
                   )}>
-                    {config?.price || "R$ 197"}
+                    {isBlackFriday ? (config?.blackFridayPrice || "R$ 97") : (config?.price || "R$ 197")}
                   </p>
                   <p className="text-xs text-muted-foreground font-medium mt-1">
                     ou em até 12x no cartão de crédito
